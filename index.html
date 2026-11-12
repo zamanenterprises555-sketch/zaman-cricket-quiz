@@ -37,10 +37,10 @@ input,select,textarea{width:100%;padding:0.7rem;border-radius:10px;border:none;m
   <div id="home" class="card">
     <h2 style="text-align:center;margin-bottom:1rem">റൂം</h2>
     <input id="playerName" placeholder="നിങ്ങളുടെ പേര്" maxlength="20">
-    <button onclick="createRoom()">പുതിയ റൂം സൃഷ്ടിക്കുക</button>
+    <button type="button" onclick="createRoom()">പുതിയ റൂം സൃഷ്ടിക്കുക</button>
     <input id="roomCode" placeholder="റൂം കോഡ്" maxlength="6" style="text-transform:uppercase">
-    <button class="secondary" onclick="joinRoom()">ജോയിൻ ചെയ്യുക</button>
-    <button class="secondary" onclick="rejoinRoom()">റീജോയിൻ</button>
+    <button type="button" class="secondary" onclick="joinRoom()">ജോയിൻ ചെയ്യുക</button>
+    <button type="button" class="secondary" onclick="rejoinRoom()">റീജോയിൻ</button>
   </div>
   <div id="lobby" class="card hidden">
     <h2>റൂം: <span id="displayRoom"></span></h2>
@@ -51,7 +51,7 @@ input,select,textarea{width:100%;padding:0.7rem;border-radius:10px;border:none;m
       <input type="number" id="battingCount" value="2" min="1" max="11">
       <label>ബൗളിംഗ് ടീം</label>
       <input type="number" id="bowlingCount" value="1" min="1" max="11">
-      <button onclick="startMatch()">മാച്ച് ആരംഭിക്കുക</button>
+      <button type="button" onclick="startMatch()">മാച്ച് ആരംഭിക്കുക</button>
     </div>
     <p class="small" id="waitingMsg">ഹോസ്റ്റ് മാച്ച് ആരംഭിക്കുന്നത് വരെ കാത്തിരിക്കുക...</p>
   </div>
@@ -67,22 +67,22 @@ input,select,textarea{width:100%;padding:0.7rem;border-radius:10px;border:none;m
     <div class="timer" id="timer">10</div>
     <div id="bowlerPanel" class="card hidden">
       <h3>ബൗളർ പാനൽ</h3>
-      <button class="secondary" onclick="changeBowler()">ബൗളർ മാറ്റുക</button>
+      <button type="button" class="secondary" onclick="changeBowler()">ബൗളർ മാറ്റുക</button>
       <label>ചോദ്യം സെലക്ട് ചെയ്യുക</label>
       <select id="qSelect"></select>
       <div class="small" id="qTypeInfo"></div>
-      <button onclick="bowlerSelectQuestion()">ചോദ്യം സെലക്ട് ചെയ്യുക</button>
+      <button type="button" onclick="bowlerSelectQuestion()">ചോദ്യം സെലക്ട് ചെയ്യുക</button>
       <div id="bowlerAnswerArea" class="hidden">
         <p id="bowlerQText"></p>
         <div id="bowlerOptions"></div>
-        <button onclick="bowlerSubmitAnswer()">ഉത്തരം സമർപ്പിക്കുക</button>
+        <button type="button" onclick="bowlerSubmitAnswer()">ഉത്തരം സമർപ്പിക്കുക</button>
       </div>
     </div>
     <div id="questionCard" class="card hidden">
       <div id="question" style="font-size:1.05rem;margin-bottom:1rem"></div>
       <div id="options"></div>
       <textarea id="textAnswer" class="hidden" rows="3" placeholder="ഉത്തരം എഴുതുക..."></textarea>
-      <button id="submitText" class="hidden" onclick="submitTextAnswer()">ഉത്തരം സമർപ്പിക്കുക</button>
+      <button type="button" id="submitText" class="hidden" onclick="submitTextAnswer()">ഉത്തരം സമർപ്പിക്കുക</button>
     </div>
     <div id="spectatorView" class="card hidden">
       <h3>ലൈവ് വ്യൂ</h3>
@@ -286,3 +286,311 @@ function rejoinRoom(){
     let existingId=null;
     Object.entries(d.players||{}).forEach(([id,p])=>{
       if(p.name===playerName)existingId=id;
+    });
+    if(existingId){
+      playerId=existingId;
+    }else{
+      playerId="p"+Date.now();
+      gameRef.child("players/"+playerId).set({name:playerName,role:"spectator",runs:0,balls:0});
+    }
+    enterLobby();
+  });
+}
+
+function enterLobby(){
+  document.getElementById('home').classList.add('hidden');
+  document.getElementById('lobby').classList.remove('hidden');
+  document.getElementById('displayRoom').textContent=roomId;
+  if(isHost){
+    document.getElementById('hostControls').classList.remove('hidden');
+    document.getElementById('waitingMsg').classList.add('hidden');
+  }
+  gameRef.off();
+  gameRef.on("value",snap=>{
+    const d=snap.val();if(!d)return;
+    renderPlayers(d);
+    if(d.status==="playing")showGame(d);
+    if(d.status==="finished")showSummary(d);
+  });
+}
+
+function renderPlayers(d){
+  const list=document.getElementById('playerList');
+  if(!list)return;
+  list.innerHTML="<b>പ്ലേയേഴ്സ് ("+Object.keys(d.players||{}).length+"):</b><br>";
+  Object.entries(d.players||{}).forEach(([id,p])=>{
+    list.innerHTML+=`<div>• ${p.name} <span class="role">${p.role||"spectator"}</span></div>`;
+    if(id===playerId)myRole=p.role||"spectator";
+  });
+}
+
+function startMatch(){
+  const bc=parseInt(document.getElementById('battingCount').value)||2;
+  const bow=parseInt(document.getElementById('bowlingCount').value)||1;
+  gameRef.once("value",snap=>{
+    const d=snap.val();
+    const pids=Object.keys(d.players||{});
+    if(pids.length<bc+bow)return alert("മതിയായ പ്ലേയേഴ്സ് ഇല്ല");
+    const batting=pids.slice(0,bc);
+    const bowling=pids.slice(bc,bc+bow);
+    const updates={status:"playing",score:0,wickets:0,extras:0,ball:0,over:0,innings:1,used:[],phase:"select",battingCount:bc,bowlingCount:bow,battingOrder:batting,bowlingOrder:bowling,currentBowlerIndex:0,lastBalls:[],target:null};
+    batting.forEach((id,i)=>updates[`players/${id}/role`]=i===0?"striker":(i===1?"nonstriker":"batsman"));
+    bowling.forEach((id,i)=>updates[`players/${id}/role`]=i===0?"bowler":"bowling");
+    updates.striker=batting[0];
+    updates.nonstriker=batting[1]||null;
+    updates.bowler=bowling[0];
+    gameRef.update(updates);
+  });
+}
+
+function showGame(d){
+  document.getElementById('lobby').classList.add('hidden');
+  document.getElementById('game').classList.remove('hidden');
+  updateScore(d);
+  const qt=getQuestionType(d.over||0);
+  document.getElementById('qTypeInfo').textContent="തരം: "+qt.label;
+  document.getElementById('bowlerPanel').classList.toggle('hidden',myRole!=="bowler");
+  document.getElementById('questionCard').classList.toggle('hidden',!(myRole==="striker"||myRole==="batsman")||d.phase!=="bowl");
+  document.getElementById('spectatorView').classList.toggle('hidden',myRole==="bowler"||myRole==="striker"||myRole==="batsman");
+  if(myRole==="bowler"&&d.phase==="select")populateQSelect(d);
+  if(d.phase==="bowl"&&(myRole==="striker"||myRole==="batsman"))loadBatsmanQuestion(d);
+  if(myRole!=="striker"&&myRole!=="batsman"&&d.currentQ!==null)showSpectator(d);
+  showPlayerStats(d);
+}
+
+function updateScore(d){
+  const total=(d.score||0)+(d.extras||0);
+  document.getElementById('score').textContent=total;
+  document.getElementById('wickets').textContent=d.wickets||0;
+  document.getElementById('extras').textContent=d.extras||0;
+  document.getElementById('over').textContent=(d.over||0)+"."+(d.ball||0);
+  const balls=(d.over||0)*6+(d.ball||0);
+  const rr=balls>0?(total/(balls/6)).toFixed(2):"0.00";
+  document.getElementById('rr').textContent=rr;
+  let st=d.players?.[d.striker]?.name||"-";
+  if(d.nonstriker)st+=" / "+(d.players?.[d.nonstriker]?.name||"");
+  document.getElementById('striker').textContent=st;
+  document.getElementById('bowler').textContent=d.players?.[d.bowler]?.name||"-";
+  const lb=d.lastBalls||[];
+  document.getElementById('lastBalls').textContent="അവസാനം: "+lb.slice(-5).join(" ");
+}
+
+function showPlayerStats(d){
+  const div=document.getElementById('playerStats');
+  div.classList.remove('hidden');
+  let html="<b>പ്ലേയർ സ്റ്റാറ്റ്സ്</b><br>";
+  Object.entries(d.players||{}).forEach(([id,p])=>{
+    if(p.runs||p.balls)html+=`${p.name}: ${p.runs||0} റൺസ് (${p.balls||0} ബോൾ)<br>`;
+  });
+  div.innerHTML=html;
+}
+
+function populateQSelect(d){
+  const sel=document.getElementById('qSelect');
+  sel.innerHTML="";
+  questions.forEach((q,i)=>{
+    if(!(d.used||[]).includes(i)){
+      const opt=document.createElement('option');
+      opt.value=i;opt.textContent=(i+1)+". "+q.q;
+      sel.appendChild(opt);
+    }
+  });
+  if(sel.options.length===0){
+    sel.innerHTML="<option>ചോദ്യങ്ങൾ തീർന്നു</option>";
+  }
+}
+
+function changeBowler(){
+  gameRef.once("value",snap=>{
+    const d=snap.val();
+    const order=d.bowlingOrder||[];
+    if(order.length<2)return alert("മറ്റ് ബൗളർ ഇല്ല");
+    let idx=(d.currentBowlerIndex||0)+1;
+    if(idx>=order.length)idx=0;
+    const nb=order[idx];
+    gameRef.update({bowler:nb,currentBowlerIndex:idx,phase:"select",currentQ:null});
+    gameRef.child("players/"+d.bowler+"/role").set("bowling");
+    gameRef.child("players/"+nb+"/role").set("bowler");
+  });
+}
+
+function bowlerSelectQuestion(){
+  const idx=parseInt(document.getElementById('qSelect').value);
+  if(isNaN(idx))return alert("ചോദ്യം തിരഞ്ഞെടുക്കുക");
+  const q=questions[idx];
+  speak(q.q);
+  gameRef.once("value",snap=>{
+    const d=snap.val();
+    const qt=getQuestionType(d.over||0);
+    gameRef.update({currentQ:idx,qTime:qt.time,phase:"bowlerAnswer",qType:qt.type});
+  });
+  document.getElementById('bowlerAnswerArea').classList.remove('hidden');
+  document.getElementById('bowlerQText').textContent=q.q;
+  const opts=document.getElementById('bowlerOptions');
+  opts.innerHTML="";
+  if(q.type==="mcq"){
+    q.o.forEach((o,i)=>{
+      const div=document.createElement('div');
+      div.className='option';div.textContent=o;div.dataset.i=i;
+      div.onclick=()=>{opts.querySelectorAll('.option').forEach(x=>x.classList.remove('selected'));div.classList.add('selected');};
+      opts.appendChild(div);
+    });
+  }else{
+    opts.innerHTML="<p class='small'>ടെക്സ്റ്റ് ഉത്തരം — ബൗളർ ശരി/തെറ്റ് തീരുമാനിക്കും</p>";
+  }
+}
+
+function bowlerSubmitAnswer(){
+  gameRef.once("value",snap=>{
+    const d=snap.val();
+    const q=questions[d.currentQ];
+    if(q.type==="mcq"){
+      const sel=document.querySelector('#bowlerOptions .option.selected');
+      if(!sel)return alert("ഉത്തരം തിരഞ്ഞെടുക്കുക");
+      if(parseInt(sel.dataset.i)===q.a){
+        gameRef.update({phase:"bowl"});
+        document.getElementById('bowlerAnswerArea').classList.add('hidden');
+      }else{
+        gameRef.update({extras:(d.extras||0)+1,phase:"select",currentQ:null});
+        alert("നോ ബോൾ! 1 എക്സ്ട്രാ.");
+      }
+    }else{
+      gameRef.update({phase:"bowl"});
+      document.getElementById('bowlerAnswerArea').classList.add('hidden');
+    }
+  });
+}
+
+function loadBatsmanQuestion(d){
+  if(d.currentQ===null||d.phase!=="bowl")return;
+  const q=questions[d.currentQ];
+  const qt=getQuestionType(d.over||0);
+  document.getElementById('question').textContent=q.q;
+  const opts=document.getElementById('options');
+  const ta=document.getElementById('textAnswer');
+  const sb=document.getElementById('submitText');
+  opts.innerHTML="";
+  if(qt.type==="mcq"){
+    ta.classList.add('hidden');sb.classList.add('hidden');
+    q.o.forEach((o,i)=>{
+      const div=document.createElement('div');
+      div.className='option';div.textContent=o;
+      div.onclick=()=>batsmanAnswer(i,d.currentQ);
+      opts.appendChild(div);
+    });
+  }else{
+    ta.classList.remove('hidden');sb.classList.remove('hidden');
+    ta.value="";
+  }
+  document.getElementById('questionCard').classList.remove('hidden');
+  startTimer(qt.time);
+}
+
+function showSpectator(d){
+  if(d.currentQ===null)return;
+  const q=questions[d.currentQ];
+  document.getElementById('specInfo').innerHTML="<b>ചോദ്യം:</b> "+q.q;
+  document.getElementById('spectatorView').classList.remove('hidden');
+}
+
+function startTimer(sec){
+  clearInterval(timerInterval);
+  let t=sec;
+  document.getElementById('timer').textContent=t;
+  startTime=Date.now();
+  timerInterval=setInterval(()=>{
+    t--;
+    document.getElementById('timer').textContent=Math.max(0,t);
+    if(t<=0)clearInterval(timerInterval);
+  },1000);
+}
+
+function batsmanAnswer(choice,qIdx){
+  clearInterval(timerInterval);
+  const timeTaken=(Date.now()-startTime)/1000;
+  processAnswer(choice,qIdx,timeTaken,null);
+}
+
+function submitTextAnswer(){
+  clearInterval(timerInterval);
+  const timeTaken=(Date.now()-startTime)/1000;
+  const text=document.getElementById('textAnswer').value.trim();
+  processAnswer(null,null,timeTaken,text);
+}
+
+function processAnswer(choice,qIdx,timeTaken,text){
+  gameRef.once("value",snap=>{
+    const d=snap.val();
+    const qt=getQuestionType(d.over||0);
+    let runs=0,wicket=false;
+    if(choice!==null){
+      const correct=questions[qIdx].a;
+      if(choice===correct){
+        runs=calcRuns(timeTaken,qt.time);
+        if(runs===0)wicket=true;
+      }else wicket=true;
+    }else{
+      runs=calcRuns(timeTech,qt.time);
+      if(runs===0)wicket=true;
+    }
+    const newScore=(d.score||0)+runs;
+    const newWickets=(d.wickets||0)+(wicket?1:0);
+    let newBall=(d.ball||0)+1,newOver=d.over||0;
+    let rotate=false;
+    if(runs===1||runs===3)rotate=true;
+    if(newBall>=6){newBall=0;newOver++;rotate=true;}
+    const used=[...(d.used||[]),qIdx].filter(x=>x!==null);
+    const lastBalls=[...(d.lastBalls||[]),wicket?"W":runs];
+    let updates={score:newScore,wickets:newWickets,ball:newBall,over:newOver,used:used,phase:"select",currentQ:null,lastBalls:lastBalls};
+    if(d.striker){
+      updates[`players/${d.striker}/runs`]=(d.players?.[d.striker]?.runs||0)+runs;
+      updates[`players/${d.striker}/balls`]=(d.players?.[d.striker]?.balls||0)+1;
+    }
+    if(wicket)updates[`players/${d.striker}/role`]="out";
+    if(rotate&&d.nonstriker&&!wicket){
+      updates.striker=d.nonstriker;
+      updates.nonstriker=d.striker;
+      updates[`players/${d.striker}/role`]="nonstriker";
+      updates[`players/${d.nonstriker}/role`]="striker";
+    }
+    const maxW=(d.battingCount||2);
+    if(newWickets>=maxW||newOver>=20){
+      if(d.innings===1){
+        updates.innings=2;
+        updates.score=0;updates.wickets=0;updates.ball=0;updates.over=0;
+        updates.target=newScore+(d.extras||0)+1;
+        updates.status="playing";
+      }else{
+        updates.status="finished";
+      }
+    }
+    if(d.innings===2&&d.target&&newScore+(d.extras||0)>=d.target){
+      updates.status="finished";
+    }
+    gameRef.update(updates);
+    showResult(runs,wicket,timeTaken);
+  });
+}
+
+function showResult(runs,wicket,time){
+  const res=document.getElementById('result');
+  res.classList.remove('hidden');
+  res.innerHTML=wicket?"<h2 style='color:#ef4444'>വിക്കറ്റ്!</h2><p>"+time.toFixed(1)+"s</p>":"<h2 style='color:#22c55e'>"+runs+" റൺസ്!</h2><p>"+time.toFixed(1)+"s</p>";
+  setTimeout(()=>res.classList.add('hidden'),2500);
+}
+
+function showSummary(d){
+  document.getElementById('game').classList.add('hidden');
+  document.getElementById('summary').classList.remove('hidden');
+  const total=(d.score||0)+(d.extras||0);
+  let html="<p>ഫൈനൽ സ്കോർ: <b>"+total+"/"+d.wickets+"</b></p>";
+  let motm="",maxR=0;
+  Object.entries(d.players||{}).forEach(([id,p])=>{
+    if((p.runs||0)>maxR){maxR=p.runs;motm=p.name;}
+  });
+  html+="<p>മാൻ ഓഫ് ദ മാച്ച്: <b>"+motm+"</b> ("+maxR+" റൺസ്)</p>";
+  document.getElementById('summaryContent').innerHTML=html;
+}
+</script>
+</body>
+</html>
