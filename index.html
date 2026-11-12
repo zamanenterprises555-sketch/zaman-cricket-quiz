@@ -1,251 +1,288 @@
 <!DOCTYPE html>
 <html lang="ml">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Zaman Cricket Quiz PWA</title>
-    <link rel="manifest" href="manifest.json">
-    <style>
-        :root {
-            --primary: #1b5e20;
-            --secondary: #2e7d32;
-            --accent: #ff9800;
-            --bg: #f4f6f8;
-            --card-bg: #ffffff;
-            --text: #333333;
-        }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-        }
-        header {
-            background-color: var(--primary);
-            color: white;
-            width: 100%;
-            padding: 15px;
-            text-align: center;
-            font-size: 1.5rem;
-            font-weight: bold;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
-        }
-        .container {
-            width: 90%;
-            max-width: 600px;
-            background: var(--card-bg);
-            margin: 20px auto;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
-        button {
-            background-color: var(--secondary);
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            margin: 10px 0;
-            width: 100%;
-            border-radius: 8px;
-            font-size: 1rem;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background 0.2s;
-        }
-        button:hover {
-            background-color: var(--primary);
-        }
-        input, select {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-            box-sizing: border-box;
-            font-size: 1rem;
-        }
-        .scoreboard {
-            background: #e8f5e9;
-            padding: 10px;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            border-left: 5px solid var(--secondary);
-        }
-        .hidden {
-            display: none !important;
-        }
-        .question-box {
-            font-size: 1.1rem;
-            font-weight: bold;
-            margin-bottom: 15px;
-        }
-        .timer {
-            color: #d32f2f;
-            font-weight: bold;
-            float: right;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#22c55e">
+<title>Zaman Cricket Quiz</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,'Noto Sans Malayalam',sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.container{max-width:520px;margin:0 auto;padding:1rem}
+header{text-align:center;padding:1rem 0}
+h1{color:#22c55e;font-size:1.4rem}
+.card{background:#1e293b;border-radius:16px;padding:1.2rem;margin:0.8rem 0}
+button{background:#22c55e;color:#0f172a;border:none;padding:0.7rem 1.2rem;border-radius:10px;font-weight:700;width:100%;margin:0.3rem 0;font-size:1rem;cursor:pointer}
+button.secondary{background:#334155;color:#e2e8f0}
+input,select,textarea{width:100%;padding:0.7rem;border-radius:10px;border:none;margin:0.3rem 0;font-size:1rem;background:#334155;color:white}
+.option{background:#334155;padding:0.8rem;margin:0.4rem 0;border-radius:10px;cursor:pointer;border:2px solid transparent}
+.option.selected{background:#475569;border-color:#22c55e}
+.scoreboard{display:flex;justify-content:space-between;font-size:1rem;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.4rem}
+.timer{font-size:2rem;text-align:center;color:#facc15;font-weight:700}
+.hidden{display:none}
+.small{font-size:0.8rem;color:#94a3b8}
+.role{font-size:0.7rem;background:#22c55e;color:#0f172a;padding:0.1rem 0.4rem;border-radius:10px;margin-left:0.3rem}
+.stats{font-size:0.85rem;background:#0f172a;padding:0.5rem;border-radius:8px;margin-top:0.5rem}
+</style>
 </head>
 <body>
-
-    <header>🏏 Zaman Cricket Quiz</header>
-
-    <div class="container" id="setup-screen">
-        <h2>Game Setup</h2>
-        <label>Player Name:</label>
-        <input type="text" id="player-name" placeholder="আপনার പേര് നൽകുക">
-        
-        <label>Team Size (Batting/Bowling):</label>
-        <select id="team-size">
-            <option value="1">Single Player (Solo)</option>
-            <option value="2">2 vs 2</option>
-            <option value="3">3 vs 3</option>
-            <option value="4">4 vs 4</option>
-        </select>
-
-        <button onclick="startGame()">Start / Join Room</button>
+<div class="container">
+  <header>
+    <h1>🏏 ZAMAN CRICKET QUIZ</h1>
+    <p class="small">Multiplayer • 20 Overs • Mobile Electronics Edition</p>
+  </header>
+  <div id="home" class="card">
+    <h2 style="text-align:center;margin-bottom:1rem">റൂം</h2>
+    <input id="playerName" placeholder="നിങ്ങളുടെ പേര്" maxlength="20">
+    <button onclick="createRoom()">പുതിയ റൂം സൃഷ്ടിക്കുക</button>
+    <input id="roomCode" placeholder="റൂം കോഡ്" maxlength="6" style="text-transform:uppercase">
+    <button class="secondary" onclick="joinRoom()">ജോയിൻ ചെയ്യുക</button>
+    <button class="secondary" onclick="rejoinRoom()">റീജോയിൻ</button>
+  </div>
+  <div id="lobby" class="card hidden">
+    <h2>റൂം: <span id="displayRoom"></span></h2>
+    <div id="playerList"></div>
+    <div id="hostControls" class="hidden">
+      <h3 style="margin:1rem 0 0.5rem">ടീം സെറ്റിംഗ്</h3>
+      <label>ബാറ്റിംഗ് ടീം</label>
+      <input type="number" id="battingCount" value="2" min="1" max="11">
+      <label>ബൗളിംഗ് ടീം</label>
+      <input type="number" id="bowlingCount" value="1" min="1" max="11">
+      <button onclick="startMatch()">മാച്ച് ആരംഭിക്കുക</button>
     </div>
-
-    <div class="container hidden" id="game-screen">
-        <div class="scoreboard" id="scoreboard-display">
-            <!-- Score & Match Stats -->
-        </div>
-
-        <div class="question-box" id="question-container">
-            <span class="timer" id="timer-display">⏱ 10s</span>
-            <p id="question-text">ചോദ്യം ഇവിടെ വരു...</p>
-            <div id="options-container"></div>
-        </div>
+    <p class="small" id="waitingMsg">ഹോസ്റ്റ് മാച്ച് ആരംഭിക്കുന്നത് വരെ കാത്തിരിക്കുക...</p>
+  </div>
+  <div id="game" class="hidden">
+    <div class="scoreboard">
+      <div>സ്കോർ: <b id="score">0</b>/<b id="wickets">0</b></div>
+      <div>ഓവർ: <b id="over">0.0</b></div>
+      <div>എക്സ്ട്രാ: <b id="extras">0</b></div>
+      <div>RR: <b id="rr">0.00</b></div>
     </div>
+    <div class="small">സ്ട്രൈക്കർ: <span id="striker"></span> | ബൗളർ: <span id="bowler"></span></div>
+    <div id="lastBalls" class="small"></div>
+    <div class="timer" id="timer">10</div>
+    <div id="bowlerPanel" class="card hidden">
+      <h3>ബൗളർ പാനൽ</h3>
+      <button class="secondary" onclick="changeBowler()">ബൗളർ മാറ്റുക</button>
+      <label>ചോദ്യം സെലക്ട് ചെയ്യുക</label>
+      <select id="qSelect"></select>
+      <div class="small" id="qTypeInfo"></div>
+      <button onclick="bowlerSelectQuestion()">ചോദ്യം സെലക്ട് ചെയ്യുക</button>
+      <div id="bowlerAnswerArea" class="hidden">
+        <p id="bowlerQText"></p>
+        <div id="bowlerOptions"></div>
+        <button onclick="bowlerSubmitAnswer()">ഉത്തരം സമർപ്പിക്കുക</button>
+      </div>
+    </div>
+    <div id="questionCard" class="card hidden">
+      <div id="question" style="font-size:1.05rem;margin-bottom:1rem"></div>
+      <div id="options"></div>
+      <textarea id="textAnswer" class="hidden" rows="3" placeholder="ഉത്തരം എഴുതുക..."></textarea>
+      <button id="submitText" class="hidden" onclick="submitTextAnswer()">ഉത്തരം സമർപ്പിക്കുക</button>
+    </div>
+    <div id="spectatorView" class="card hidden">
+      <h3>ലൈവ് വ്യൂ</h3>
+      <p id="specInfo">കാത്തിരിക്കുന്നു...</p>
+    </div>
+    <div id="playerStats" class="stats hidden"></div>
+    <div id="result" class="card hidden"></div>
+  </div>
+  <div id="summary" class="card hidden">
+    <h2>മാച്ച് സമ്മറി</h2>
+    <div id="summaryContent"></div>
+  </div>
+</div>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBKQQRIcz1eEsz-V0r8WYsOCXBjAsR6XNQ",
+  authDomain: "zaman-6587f.firebaseapp.com",
+  databaseURL: "https://zaman-6587f-default-rtdb.firebaseio.com",
+  projectId: "zaman-6587f",
+  storageBucket: "zaman-6587f.firebasestorage.app",
+  messagingSenderId: "985807833692",
+  appId: "1:985807833692:web:4d331bd0b2e8db0fcdb499"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+let roomId=null, playerId=null, playerName="", isHost=false, gameRef=null;
+let timerInterval=null, startTime=0, myRole="spectator";
 
-    <script>
-        // Comprehensive Question Bank based on Mobile Repairing Manual & Electronics Data
-        const questionBank = [
-            // Overs 1-6: MCQ & Symbol ID
-            { overMin: 1, overMax: 6, type: 'mcq', q: "താഴെ നൽകിയിരിക്കുന്ന യൂറോപ്യൻ/അമേരിക്കൻ രീതിയിലുള്ള സിംബൽ ഏത് കമ്പോണന്റിന്റേതാണ്?", options: ["കപ്പാസിറ്റർ", "റെസിസ്റ്റർ (Resistor)", "ഡയോഡ്", "കോയിൽ"], ans: 1 },
-            { overMin: 1, overMax: 6, type: 'mcq', q: "മൾട്ടിമീറ്റർ ബീപ് മോഡിൽ വെച്ച് പരിശോധിക്കുമ്പോൾ '000' കാണിച്ച് ബീപ് സൗണ്ട് കേൾപ്പിക്കുന്നതും AC ബ്ലോക്ക് ചെയ്യുന്നതുമായ കമ്പോണന്റ് ഏത്?", options: ["കോയിൽ (Inductor)", "റെസിസ്റ്റർ", "സെനർ ഡയോഡ്", "കപ്പാസിറ്റർ"], ans: 0 },
-            { overMin: 1, overMax: 6, type: 'mcq', q: "10000 ഓമിന്റെ (10K) റെസിസ്റ്റർ മൾട്ടിമീറ്റർ ഉപയോഗിച്ച് ചെക്ക് ചെയ്യാൻ ഏത് റേഞ്ച് ആണ് സെലക്ട് ചെയ്യേണ്ടത്?", options: ["200Ω", "2K", "20K", "2M"], ans: 2 },
-            { overMin: 1, overMax: 6, type: 'mcq', q: "ഫോൺ വിളിക്കുമ്പോൾ ചെവിയോട് അടുപ്പിക്കുമ്പോൾ ബാക്ക് ലൈറ്റ് ഓഫ് ചെയ്യാൻ സഹായിക്കുന്ന സെൻസർ ഏത്?", options: ["ഫേസ് ഐഡി", "പ്രോക്സിമിറ്റി സെൻസർ (Proximity Sensor)", "ഗൈറോസ്കോപ്പ്", "ബാരോമീറ്റർ"], ans: 1 },
-            { overMin: 1, overMax: 6, type: 'mcq', q: "റെഗുലർ ഡയോഡിന്റെ മുകളിൽ കാണുന്ന വൈറ്റ് ഷെയ്ഡ് ഏത് ഭാഗത്തെയാണ് സൂചിപ്പിക്കുന്നത്?", options: ["ആനോഡ് (+ve)", "കാഥോഡ് (Cathode / -ve)", "ബേസ്", "എമിറ്റർ"], ans: 1 },
-            { overMin: 1, overMax: 6, type: 'mcq', q: "360 ഡിഗ്രി വൃത്താകൃതിയിലുള്ള ചലനങ്ങളെ സെൻസ് ചെയ്ത് ഗെയിമിംഗിനും മറ്റും ഉപയോഗിക്കുന്ന സെൻസർ ഏത്?", options: ["ആക്സിലറോമീറ്റർ", "ഗൈറോസ്കോപ്പ് (Gyroscope)", "മാഗ്നെറ്റോമീറ്റർ", "സോളി സെൻസർ"], ans: 1 },
+const questions = [
+  {q:"ഇലക്ട്രോണുകൾ ചലിക്കാൻ നൽകുന്ന ശക്തിയെ എന്ത് പറയുന്നു?",o:["Current","Voltage (EMF)","Resistance","Power"],a:1,type:"mcq"},
+  {q:"Voltage-ന്റെ മറ്റൊരു പേര് എന്താണ്?",o:["Current","Electro Motive Force","Resistance","Power"],a:1,type:"mcq"},
+  {q:"വൈദ്യുതിയെ പൂർണ്ണമായും കടത്തിവിടുന്ന വസ്തുക്കളെ എന്ത് പറയുന്നു?",o:["Insulator","Conductor","Semi Conductor","Resistor"],a:1,type:"mcq"},
+  {q:"Conductor-ന്റെ ഉദാഹരണം ഏതാണ്?",o:["പ്ലാസ്റ്റിക്","തടി","ചെമ്പ്","റബ്ബർ"],a:2,type:"mcq"},
+  {q:"വൈദ്യുതിയെ കടത്തിവിടാത്ത വസ്തുക്കളെ എന്ത് പറയുന്നു?",o:["Conductor","Insulator","Semi Conductor","Diode"],a:1,type:"mcq"},
+  {q:"Insulator-ന്റെ ഉദാഹരണം ഏതാണ്?",o:["ചെമ്പ്","ഇരുമ്പ്","പ്ലാസ്റ്റിക്","സ്വർണം"],a:2,type:"mcq"},
+  {q:"അർദ്ധചാലകം എന്ന് അറിയപ്പെടുന്നത് ഏത്?",o:["Conductor","Insulator","Semi Conductor","Resistor"],a:2,type:"mcq"},
+  {q:"Resistor-ന്റെ യൂണിറ്റ് എന്താണ്?",o:["Farad","Ohm","Henry","Watt"],a:1,type:"mcq"},
+  {q:"0 Ohm മൂല്യമുള്ള Resistor-നെ എന്ത് പറയുന്നു?",o:["Array","Jumper","Thermistor","High Power"],a:1,type:"mcq"},
+  {q:"ഒന്നിലധികം Resistor-കൾ ഒരുമിച്ച് വരുന്നതിനെ എന്ത് പറയുന്നു?",o:["Jumper","Array Resistor","Thermistor","Variable Resistor"],a:1,type:"mcq"},
+  {q:"Capacitor-ന്റെ യൂണിറ്റ് എന്താണ്?",o:["Ohm","Farad","Henry","Ampere"],a:1,type:"mcq"},
+  {q:"Capacitor എന്ത് ചെയ്യുന്നു?",o:["AC കടത്തിവിടുകയും DC തടയുകയും","DC കടത്തിവിടുകയും AC തടയുകയും","രണ്ടും കടത്തിവിടുക","രണ്ടും തടയുക"],a:0,type:"mcq"},
+  {q:"Polarized Capacitor-ന് എന്ത് ഉണ്ട്?",o:["പോസിറ്റീവ് മാത്രം","നെഗറ്റീവ് മാത്രം","പോസിറ്റീവും നെഗറ്റീവും","ധ്രുവമില്ല"],a:2,type:"mcq"},
+  {q:"Coil-ന്റെ യൂണിറ്റ് എന്താണ്?",o:["Ohm","Farad","Henry","Watt"],a:2,type:"mcq"},
+  {q:"Boosting Coil എന്ത് ചെയ്യുന്നു?",o:["വോൾട്ടേജ് കുറയ്ക്കുന്നു","വോൾട്ടേജ് കൂട്ടുന്നു","ഫിൽട്ടർ ചെയ്യുന്നു","സ്വിച്ച് ചെയ്യുന്നു"],a:1,type:"mcq"},
+  {q:"Diode-ൽ P ഭാഗത്തെ എന്ത് പറയുന്നു?",o:["Cathode","Anode","Base","Emitter"],a:1,type:"mcq"},
+  {q:"Diode-ൽ N ഭാഗത്തെ എന്ത് പറയുന്നു?",o:["Anode","Cathode","Base","Collector"],a:1,type:"mcq"},
+  {q:"ഒന്നിലധികം Diode-കൾ ഒരുമിച്ച് വരുന്നതിനെ എന്ത് പറയുന്നു?",o:["Zener Diode","Array Diode","LED","Photodiode"],a:1,type:"mcq"},
+  {q:"Zener Diode പ്രധാനമായും എന്തിന് ഉപയോഗിക്കുന്നു?",o:["Rectification","Voltage Regulation","Amplification","Oscillation"],a:1,type:"mcq"},
+  {q:"NPN Transistor Base-ൽ എന്ത് വോൾട്ടേജ് വേണം?",o:["-ve","+ve","0","AC"],a:1,type:"mcq"},
+  {q:"PNP Transistor Base-ൽ എന്ത് വോൾട്ടേജ് വേണം?",o:["+ve","-ve","0","AC"],a:1,type:"mcq"},
+  {q:"Transistor-ന്റെ മൂന്ന് ഭാഗങ്ങൾ ഏതൊക്കെ?",o:["Anode, Cathode, Gate","Base, Collector, Emitter","Source, Drain, Gate","Positive, Negative, Ground"],a:1,type:"mcq"},
+  {q:"Oscillator എന്ത് ചെയ്യുന്നു?",o:["AC-യെ DC ആക്കുന്നു","DC-യെ AC ആക്കുന്നു","വോൾട്ടേജ് കുറയ്ക്കുന്നു","വോൾട്ടേജ് കൂട്ടുന്നു"],a:1,type:"mcq"},
+  {q:"Real Time Clock (RTC) എന്ത് ചെയ്യുന്നു?",o:["ചാർജ് ചെയ്യുന്നു","ഫ്രീക്വൻസി നൽകുന്നു","വോൾട്ടേജ് റെഗുലേറ്റ് ചെയ്യുന്നു","ഓഡിയോ പ്രോസസ് ചെയ്യുന്നു"],a:1,type:"mcq"},
+  {q:"LDO എന്ത് ചെയ്യുന്നു?",o:["വോൾട്ടേജ് കൂട്ടുന്നു","വോൾട്ടേജ് കുറയ്ക്കുന്നു","ചാർജ് ചെയ്യുന്നു","ഓഡിയോ പ്രോസസ് ചെയ്യുന്നു"],a:1,type:"mcq"},
+  {q:"Boosting IC എന്ത് ചെയ്യുന്നു?",o:["വോൾട്ടേജ് കുറയ്ക്കുന്നു","വോൾട്ടേജ് കൂട്ടുന്നു","ഫിൽട്ടർ ചെയ്യുന്നു","സ്വിച്ച് ചെയ്യുന്നു"],a:1,type:"mcq"},
+  {q:"Backlight IC ഏത് തരം IC ആണ്?",o:["LDO","Boosting IC","Audio IC","Charging IC"],a:1,type:"mcq"},
+  {q:"Power IC-യുടെ മറ്റൊരു പേര് എന്താണ്?",o:["Audio Codec","PMIC","Transceiver","Graphic IC"],a:1,type:"mcq"},
+  {q:"Ambient Light Sensor (ALS) എന്ത് ചെയ്യുന്നു?",o:["സ്ക്രീൻ ഓഫ് ചെയ്യുന്നു","ഓട്ടോ ബ്രൈറ്റ്നസ് നിയന്ത്രിക്കുന്നു","ദിശ അറിയുന്നു","ചലനം ഡിറ്റക്ട് ചെയ്യുന്നു"],a:1,type:"mcq"},
+  {q:"Proximity Sensor എന്ത് ചെയ്യുന്നു?",o:["ബ്രൈറ്റ്നസ് നിയന്ത്രിക്കുന്നു","കോൾ സമയത്ത് സ്ക്രീൻ ഓഫ് ചെയ്യുന്നു","ദിശ അറിയുന്നു","ചാർജ് ചെയ്യുന്നു"],a:1,type:"mcq"},
+  {q:"Accelerometer എന്ത് ഡിറ്റക്ട് ചെയ്യുന്നു?",o:["360° ചലനം","90°/180° ചലനം","ദിശ","വെളിച്ചം"],a:1,type:"mcq"},
+  {q:"Gyroscope എന്ത് ഡിറ്റക്ട് ചെയ്യുന്നു?",o:["90° ചലനം","360° ചലനം","ദിശ","വെളിച്ചം"],a:1,type:"mcq"},
+  {q:"Magnetometer എന്ത് ചെയ്യുന്നു?",o:["ചലനം ഡിറ്റക്ട് ചെയ്യുന്നു","ദിശ അറിയാൻ സഹായിക്കുന്നു","ബ്രൈറ്റ്നസ് നിയന്ത്രിക്കുന്നു","സ്ക്രീൻ ഓഫ് ചെയ്യുന്നു"],a:1,type:"mcq"},
+  {q:"Motion Sensor-ൽ എന്തൊക്കെ ഉൾപ്പെടുന്നു?",o:["ALS, Proximity","Accelerometer, Gyroscope, Magnetometer","Hall, LIDAR","RTC, Oscillator"],a:1,type:"mcq"},
+  {q:"Hall Sensor എന്ത് ഡിറ്റക്ട് ചെയ്യുന്നു?",o:["വെളിച്ചം","മാഗ്നെറ്റ്","ശബ്ദം","താപനില"],a:1,type:"mcq"},
+  {q:"LIDAR Sensor എന്തിന് ഉപയോഗിക്കുന്നു?",o:["ചാർജ്","Augmented Reality","ഓഡിയോ","വോൾട്ടേജ് റെഗുലേഷൻ"],a:1,type:"mcq"},
+  {q:"Audio Codec എന്ത് ചെയ്യുന്നു?",o:["വോൾട്ടേജ് കൂട്ടുന്നു","ഓഡിയോ സിഗ്നൽ പ്രോസസ് ചെയ്യുന്നു","ചാർജ് ചെയ്യുന്നു","ഡിസ്പ്ലേ നിയന്ത്രിക്കുന്നു"],a:1,type:"mcq"},
+  {q:"Transceiver IC എന്ത് ചെയ്യുന്നു?",o:["ഓഡിയോ","നെറ്റ്‌വർക്ക് കമ്മ്യൂണിക്കേഷൻ","ചാർജ്","ബാക്ക്‌ലൈറ്റ്"],a:1,type:"mcq"},
+  {q:"പുതിയ ഫോണിൽ ബാറ്ററി വോൾട്ടേജ് എത്രയ്ക്ക് താഴെ പോകരുത്?",o:["3.1V","3.8V","4.2V","5V"],a:1,type:"mcq"},
+  {q:"Series Connection-ൽ കറന്റ് എങ്ങനെ ആയിരിക്കും?",o:["വ്യത്യസ്തം","ഒരേപോലെ","പകുതി","ഇരട്ടി"],a:1,type:"mcq"},
+  {q:"Parallel Connection-ൽ വോൾട്ടേജ് എങ്ങനെ ആയിരിക്കും?",o:["വ്യത്യസ്തം","ഒരേപോലെ","പകുതി","ഇരട്ടി"],a:1,type:"mcq"},
+  {q:"LED-യുടെ പൂർണ്ണരൂപം എന്താണ്?",o:["Light Emitting Diode","Low Energy Device","Linear Electronic Device","Light Energy Diode"],a:0,type:"mcq"},
+  {q:"IC-യുടെ പൂർണ്ണരൂപം എന്താണ്?",o:["Integrated Circuit","Internal Circuit","Input Circuit","Integrated Component"],a:0,type:"mcq"},
+  {q:"PCB-യുടെ പൂർണ്ണരൂപം എന്താണ്?",o:["Printed Circuit Board","Power Circuit Board","Primary Circuit Board","Printed Component Board"],a:0,type:"mcq"},
+  {q:"PMIC-യുടെ പൂർണ്ണരൂപം എന്താണ്?",o:["Power Management IC","Primary Management IC","Printed Management IC","Power Module IC"],a:0,type:"mcq"},
+  {q:"Current-ന്റെ യൂണിറ്റ് എന്താണ്?",o:["Volt","Ampere","Ohm","Watt"],a:1,type:"mcq"},
+  {q:"Power-ന്റെ യൂണിറ്റ് എന്താണ്?",o:["Volt","Ampere","Ohm","Watt"],a:3,type:"mcq"},
+  {q:"Frequency-യുടെ യൂണിറ്റ് എന്താണ്?",o:["Hertz","Watt","Ohm","Farad"],a:0,type:"mcq"},
+  {q:"Resistance കൂടിയാൽ Current എന്താകും?",o:["കൂടും","കുറയും","മാറില്ല","ഇരട്ടിയാകും"],a:1,type:"mcq"},
+  {q:"Voltage കൂടിയാൽ Current എന്താകും?",o:["കുറയും","കൂടും","മാറില്ല","പകുതിയാകും"],a:1,type:"mcq"},
+  {q:"Ohm's Law ഫോർമുല എന്താണ്?",o:["V=IR","P=VI","E=MC²","F=MA"],a:0,type:"mcq"},
+  {q:"Power ഫോർമുല എന്താണ്?",o:["V=IR","P=VI","E=MC²","F=MA"],a:1,type:"mcq"},
+  {q:"SMD-യുടെ പൂർണ്ണരൂപം എന്താണ്?",o:["Surface Mount Device","Small Mount Device","Surface Module Device","Small Module Device"],a:0,type:"mcq"},
+  {q:"RF Coil എന്തിന് ഉപയോഗിക്കുന്നു?",o:["ചാർജ്","റേഡിയോ ഫ്രീക്വൻസി","ഓഡിയോ","ഡിസ്പ്ലേ"],a:1,type:"mcq"},
+  {q:"Non-Polarized Capacitor-ന് ധ്രുവം ഉണ്ടോ?",o:["ഉണ്ട്","ഇല്ല","ചിലപ്പോൾ","എപ്പോഴും"],a:1,type:"mcq"},
+  {q:"Ceramic Capacitor ഏത് തരം ആണ്?",o:["Polarized","Non-Polarized","രണ്ടും","ഒന്നുമില്ല"],a:1,type:"mcq"},
+  {q:"Tantalum Capacitor ഏത് തരം ആണ്?",o:["Non-Polarized","Polarized","രണ്ടും","ഒന്നുമില്ല"],a:1,type:"mcq"},
+  {q:"Array Resistor-ൽ എല്ലാ മൂല്യങ്ങളും എങ്ങനെ ആയിരിക്കും?",o:["വ്യത്യസ്തം","തുല്യം","പകുതി","ഇരട്ടി"],a:1,type:"mcq"},
+  {q:"Jumper Resistor-ന്റെ മൂല്യം എത്ര?",o:["1 Ohm","0 Ohm","10 Ohm","100 Ohm"],a:1,type:"mcq"},
+  {q:"Diode Checking-ൽ +ve എവിടെ കൊടുക്കണം?",o:["Cathode","Anode","Base","Emitter"],a:1,type:"mcq"},
+  {q:"Diode Checking-ൽ -ve എവിടെ കൊടുക്കണം?",o:["Anode","Cathode","Base","Collector"],a:1,type:"mcq"},
+  {q:"NPN Transistor Checking-ൽ Base-ൽ +ve കൊടുത്താൽ എന്ത് കാണണം?",o:["Value","No Value","Beep","Nothing"],a:1,type:"mcq"},
+  {q:"PNP Transistor Checking-ൽ Base-ൽ -ve കൊടുത്താൽ എന്ത് കാണണം?",o:["No Value","Value","Beep","Nothing"],a:1,type:"mcq"},
+  {q:"Graphic IC എന്ത് ചെയ്യുന്നു?",o:["ചാർജ്","ഡിസ്പ്ലേ ഗ്രാഫിക്സ്","ഓഡിയോ","നെറ്റ്‌വർക്ക്"],a:1,type:"mcq"},
+  {q:"Charging IC എന്ത് ചെയ്യുന്നു?",o:["ഓഡിയോ","ബാറ്ററി ചാർജ്","ഡിസ്പ്ലേ","നെറ്റ്‌വർക്ക്"],a:1,type:"mcq"},
+  {q:"WiFi IC എന്ത് ചെയ്യുന്നു?",o:["ചാർജ്","വയർലെസ് കമ്മ്യൂണിക്കേഷൻ","ഓഡിയോ","ഡിസ്പ്ലേ"],a:1,type:"mcq"},
+  {q:"Barometer Sensor എന്ത് അളക്കുന്നു?",o:["താപനില","അന്തരീക്ഷമർദ്ദം","വെളിച്ചം","ശബ്ദം"],a:1,type:"mcq"},
+  {q:"Temperature Sensor എന്ത് അളക്കുന്നു?",o:["മർദ്ദം","താപനില","വെളിച്ചം","ശബ്ദം"],a:1,type:"mcq"},
+  {q:"Microphone എന്ത് ചെയ്യുന്നു?",o:["ശബ്ദം പുറപ്പെടുവിക്കുന്നു","ശബ്ദം സ്വീകരിക്കുന്നു","വെളിച്ചം ഡിറ്റക്ട്","ചലനം ഡിറ്റക്ട്"],a:1,type:"mcq"},
+  {q:"Speaker എന്ത് ചെയ്യുന്നു?",o:["ശബ്ദം സ്വീകരിക്കുന്നു","ശബ്ദം പുറപ്പെടുവിക്കുന്നു","വെളിച്ചം ഡിറ്റക്ട്","ചലനം ഡിറ്റക്ട്"],a:1,type:"mcq"},
+  {q:"Vibrator Motor എന്ത് ചെയ്യുന്നു?",o:["ശബ്ദം","വൈബ്രേഷൻ","വെളിച്ചം","ചാർജ്"],a:1,type:"mcq"},
+  {q:"Flex Cable എന്തിന് ഉപയോഗിക്കുന്നു?",o:["ചാർജ്","കണക്ഷൻ","ഓഡിയോ","ഡിസ്പ്ലേ"],a:1,type:"mcq"},
+  {q:"Ground എന്താണ്?",o:["പോസിറ്റീവ്","നെഗറ്റീവ് റഫറൻസ്","വോൾട്ടേജ്","കറന്റ്"],a:1,type:"mcq"},
+  {q:"Short Circuit എന്താണ്?",o:["ഓപ്പൺ സർക്യൂട്ട്","അനാവശ്യ കണക്ഷൻ","നോർമൽ","ഓപ്പൺ"],a:1,type:"mcq"},
+  {q:"Open Circuit എന്താണ്?",o:["ഷോർട്ട്","ബ്രേക്ക്","നോർമൽ","ഷോർട്ട് സർക്യൂട്ട്"],a:1,type:"mcq"},
+  {q:"Multimeter എന്ത് അളക്കുന്നു?",o:["ശബ്ദം മാത്രം","വോൾട്ടേജ്, കറന്റ്, റെസിസ്റ്റൻസ്","വെളിച്ചം മാത്രം","താപനില മാത്രം"],a:1,type:"mcq"},
+  {q:"Continuity Test എന്ത് പരിശോധിക്കുന്നു?",o:["വോൾട്ടേജ്","കണക്ഷൻ","കറന്റ്","പവർ"],a:1,type:"mcq"},
+  {q:"Battery Voltage പുതിയ ഫോണിൽ എത്രയായിരിക്കണം?",o:["3.0V","3.8V-ന് മുകളിൽ","5V","2.5V"],a:1,type:"mcq"},
+  {q:"Charging Voltage സാധാരണയായി എത്ര?",o:["3V","5V","12V","24V"],a:1,type:"mcq"},
+  {q:"USB Voltage എത്ര?",o:["3V","5V","12V","24V"],a:1,type:"mcq"},
+  {q:"Display-ന് Voltage നൽകുന്നത് ഏത് IC?",o:["Audio IC","PMIC","Charging IC","WiFi IC"],a:1,type:"mcq"},
+  {q:"Touch IC എന്ത് ചെയ്യുന്നു?",o:["ചാർജ്","ടച്ച് ഡിറ്റക്ഷൻ","ഓഡിയോ","നെറ്റ്‌വർക്ക്"],a:1,type:"mcq"},
+  {q:"Camera IC എന്ത് ചെയ്യുന്നു?",o:["ചാർജ്","ക്യാമറ പ്രോസസ്സിംഗ്","ഓഡിയോ","നെറ്റ്‌വർക്ക്"],a:1,type:"mcq"},
+  {q:"Flash LED എന്തിന് ഉപയോഗിക്കുന്നു?",o:["ചാർജ്","ക്യാമറ ഫ്ലാഷ്","ഓഡിയോ","നെറ്റ്‌വർക്ക്"],a:1,type:"mcq"},
+  {q:"Crystal Oscillator എന്ത് നൽകുന്നു?",o:["വോൾട്ടേജ്","ഫ്രീക്വൻസി","കറന്റ്","പവർ"],a:1,type:"mcq"},
+  {q:"RAM എന്ത് ചെയ്യുന്നു?",o:["Permanent Storage","Temporary Storage","Charging","Display"],a:1,type:"mcq"},
+  {q:"ROM എന്ത് ചെയ്യുന്നു?",o:["Temporary Storage","Permanent Storage","Charging","Display"],a:1,type:"mcq"},
+  {q:"CPU എന്ത് ചെയ്യുന്നു?",o:["Charging","Processing","Display","Audio"],a:1,type:"mcq"},
+  {q:"GPU എന്ത് ചെയ്യുന്നു?",o:["Charging","Graphics Processing","Audio","Network"],a:1,type:"mcq"},
+  {q:"ESD എന്താണ്?",o:["Electro Static Discharge","Electronic Static Device","Electro Static Device","Electronic Static Discharge"],a:0,type:"mcq"},
+  {q:"Fuse എന്ത് ചെയ്യുന്നു?",o:["Charging","Overcurrent Protection","Audio","Display"],a:1,type:"mcq"},
+  {q:"Inductor എന്ത് ചെയ്യുന്നു?",o:["Stores Energy in Magnetic Field","Stores Energy in Electric Field","Amplifies","Switches"],a:0,type:"mcq"},
+  {q:"Capacitor എന്ത് സ്റ്റോർ ചെയ്യുന്നു?",o:["Magnetic Energy","Electric Energy","Heat","Light"],a:1,type:"mcq"},
+  {q:"MOSFET എന്ത് ചെയ്യുന്നു?",o:["Stores Energy","Switching/Amplification","Filters","Oscillates"],a:1,type:"mcq"},
+  {q:"ADC എന്ത് ചെയ്യുന്നു?",o:["Analog to Digital Conversion","Digital to Analog Conversion","Amplification","Filtering"],a:0,type:"mcq"},
+  {q:"DAC എന്ത് ചെയ്യുന്നു?",o:["Analog to Digital","Digital to Analog Conversion","Amplification","Filtering"],a:1,type:"mcq"},
+  {q:"PWM എന്ത് ചെയ്യുന്നു?",o:["Pulse Width Modulation","Power Width Modulation","Pulse Wave Modulation","Power Wave Modulation"],a:0,type:"mcq"},
+  {q:"I2C എന്താണ്?",o:["Inter Integrated Circuit","Internal Integrated Circuit","Inter Input Circuit","Internal Input Circuit"],a:0,type:"mcq"},
+  {q:"SPI എന്താണ്?",o:["Serial Peripheral Interface","Serial Power Interface","Serial Processing Interface","Serial Primary Interface"],a:0,type:"mcq"},
+  {q:"UART എന്താണ്?",o:["Universal Asynchronous Receiver Transmitter","Universal Asynchronous Receiver Transceiver","Universal Analog Receiver Transmitter","Universal Analog Receiver Transceiver"],a:0,type:"mcq"}
+];
 
-            // Overs 6-10: One-word answers
-            { overMin: 6, overMax: 10, type: 'one-word', q: "ആറ്റത്തിലെ നെഗറ്റീവ് ചാർജുള്ള ഇലക്ട്രോൺസ് ചലിക്കുമ്പോൾ ഉണ്ടാകുന്ന പ്രതിഭാസം എന്താണ്?", ans: "കറന്റ്" },
-            { overMin: 6, overMax: 10, type: 'one-word', q: "കപ്പാസിറ്റർ നല്ലതാണോ എന്ന് ഡിസി വോൾട്ടേജ് റേഞ്ചിൽ വെച്ച് നോക്കുമ്പോൾ വോൾട്ടേജ് സാവകാശം എങ്ങോട്ടാണ് എത്തേണ്ടത്?", ans: "പൂജ്യം" },
-            { overMin: 6, overMax: 10, type: 'one-word', q: "മൊബൈൽ ഫോണിന്റെ മൊത്തത്തിലുള്ള കൺട്രോളിങ് നടക്കുന്ന പ്രധാന ഐസി ഏതാണ്?", ans: "CPU" },
-            { overMin: 6, overMax: 10, type: 'one-word', q: "ഡിസി യെ AC ആക്കി മാറ്റുന്ന കൺവെർട്ടർ അറിയപ്പെടുന്ന പേര് എന്ത്?", ans: "ഓസിലേറ്റർ" },
+function getQuestionType(over){
+  if(over<6) return {type:"mcq",time:10,label:"MCQ (10 സെക്കൻഡ്)"};
+  if(over<10) return {type:"word",time:60,label:"ഒറ്റ വാക്ക് (1 മിനിറ്റ്)"};
+  if(over<15) return {type:"sentence",time:300,label:"ഒരു വാചകം (5 മിനിറ്റ്)"};
+  if(over<18) return {type:"para",time:600,label:"മൂന്ന് വാചകം (10 മിനിറ്റ്)"};
+  return {type:"mark",time:600,label:"PDF മാർക്ക് (10 മിനിറ്റ്)"};
+}
 
-            // Overs 10-15: One-sentence answers
-            { overMin: 10, overMax: 15, type: 'sentence', q: "മൊബൈൽ ഫോണിൽ ചാർജർ കണക്ട് ചെയ്യുമ്പോൾ ചാർജിംഗ് സിംബൽ കാണിക്കുകയും എന്നാൽ ബാറ്ററി ചാർജ് കൂടാതെ ഇരിക്കുകയും ചെയ്യുന്ന തകരാറിനെ എന്ത് വിളിക്കുന്നു?", ans: "നോ ആംപിയർ" },
-            { overMin: 10, overMax: 15, type: 'sentence', q: "ഒരു സർക്യൂട്ടിന്റെ ടോട്ടൽ റെസിസ്റ്റൻസിനെ മൊത്തത്തിൽ എന്ത് പേരിലാണ് വിളിക്കുന്നത്?", ans: "ഇംപെഡൻസ് (Impedance)" },
+function calcRuns(time,limit){
+  const ratio=time/limit;
+  if(ratio<=0.2) return 6;
+  if(ratio<=0.3) return 4;
+  if(ratio<=0.5) return 3;
+  if(ratio<=0.7) return 2;
+  if(ratio<=1.0) return 1;
+  return 0;
+}
 
-            // Overs 15-18: Three-sentence answers
-            { overMin: 15, overMax: 18, type: 'detailed', q: "ബാക്ക് ലൈറ്റ് സെക്ഷന്റെ പ്രവർത്തന തത്വവും അതിൽ ഉപയോഗിക്കുന്ന പ്രധാന കോയിലായ L1 ന്റെ റോഡും വിശദീകരിക്കുക.", ans: "ബാക്ക് ലൈറ്റ് ഐസിയിലെ സ്വിച്ചിംഗിലൂടെ ഉയർന്ന വോൾട്ടേജ് ഉത്പാദിപ്പിച്ച് എൽഇഡി പ്രകാശിപ്പിക്കുന്ന സംവിധാനമാണിത്." },
+function speak(text){
+  if('speechSynthesis' in window){
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang='ml-IN';
+    speechSynthesis.speak(u);
+  }
+}
 
-            // Overs 18-20: Diagram/PDF Analysis
-            { overMin: 18, overMax: 20, type: 'diagram', q: "സിം സെക്ഷനിൽ 'നോ സിം കാർഡ്' കംപ്ലൈന്റ് വരുമ്പോൾ നമ്മൾ ആദ്യം ചെക്ക് ചെയ്യേണ്ട രണ്ട് പ്രധാന ഘട്ടങ്ങൾ എഴുതുക.", ans: "സിം കാർഡ് കറക്റ്റ് ആണോ എന്നും സിം ട്രേ ശരിയായി കണക്ട് ചെയ്തിട്ടുണ്ടോ എന്നും ചെക്ക് ചെയ്യുക." }
-        ];
+function generateCode(){return Math.random().toString(36).substring(2,8).toUpperCase();}
 
-        let gameState = {
-            playerName: '',
-            teamSize: 1,
-            currentOver: 1,
-            score: 0,
-            wickets: 0,
-            balls: 0,
-            strike: 1
-        };
+function createRoom(){
+  playerName=document.getElementById('playerName').value.trim()||"Player";
+  roomId=generateCode();
+  localStorage.setItem('quizRoom',roomId);
+  localStorage.setItem('quizName',playerName);
+  playerId="p"+Date.now();
+  isHost=true;
+  gameRef=db.ref("rooms/"+roomId);
+  gameRef.set({
+    host:playerId,players:{[playerId]:{name:playerName,role:"host",runs:0,balls:0}},
+    status:"lobby",score:0,wickets:0,extras:0,ball:0,over:0,innings:1,
+    currentQ:null,used:[],phase:"select",lastBalls:[],playerStats:{}
+  });
+  enterLobby();
+}
 
-        function startGame() {
-            const name = document.getElementById('player-name').value;
-            if(!name) {
-                alert('ദയവായി പേര് നൽകുക!');
-                return;
-            }
-            gameState.playerName = name;
-            gameState.teamSize = parseInt(document.getElementById('team-size').value);
-            
-            document.getElementById('setup-screen').classList.add('hidden');
-            document.getElementById('game-screen').classList.remove('hidden');
-            
-            loadQuestion();
-        }
+function joinRoom(){
+  playerName=document.getElementById('playerName').value.trim()||"Player";
+  roomId=document.getElementById('roomCode').value.trim().toUpperCase();
+  if(!roomId)return alert("റൂം കോഡ് നൽകുക");
+  localStorage.setItem('quizRoom',roomId);
+  localStorage.setItem('quizName',playerName);
+  playerId="p"+Date.now();
+  gameRef=db.ref("rooms/"+roomId);
+  gameRef.once("value",snap=>{
+    if(!snap.exists())return alert("റൂം കണ്ടെത്തിയില്ല");
+    gameRef.child("players/"+playerId).set({name:playerName,role:"spectator",runs:0,balls:0});
+    enterLobby();
+  });
+}
 
-        function loadQuestion() {
-            // Filter questions based on current over
-            let availableQ = questionBank.filter(q => gameState.currentOver >= q.overMin && gameState.currentOver <= q.overMax);
-            if(availableQ.length === 0) availableQ = questionBank; // fallback
-            
-            let currentQ = availableQ[Math.floor(Math.random() * availableQ.length)];
-            
-            document.getElementById('question-text').innerText = `Over ${gameState.currentOver} | ${currentQ.q}`;
-            let optContainer = document.getElementById('options-container');
-            optContainer.innerHTML = '';
-
-            if(currentQ.type === 'mcq') {
-                currentQ.options.forEach((opt, index) => {
-                    let btn = document.createElement('button');
-                    btn.innerText = opt;
-                    btn.onclick = () => checkAnswer(index === currentQ.ans, true);
-                    optContainer.appendChild(btn);
-                });
-            } else {
-                let input = document.createElement('input');
-                input.type = 'text';
-                input.id = 'text-ans';
-                input.placeholder = 'ഉത്തരം ഇവിടെ എഴുതുക...';
-                let btn = document.createElement('button');
-                btn.innerText = 'Submit Answer';
-                btn.onclick = () => {
-                    let userAns = document.getElementById('text-ans').value.trim();
-                    checkAnswer(userAns.length > 0, false);
-                };
-                optContainer.appendChild(input);
-                optContainer.appendChild(btn);
-            }
-
-            updateScoreboard();
-        }
-
-        function checkAnswer(isCorrect, isMcq) {
-            if(isCorrect) {
-                let runs = 4; // Simplified dynamic scoring
-                gameState.score += runs;
-                alert(`ശരിയാണ്! ${runs} റൺസ് ലഭിച്ചു.`);
-            } else {
-                gameState.wickets += 1;
-                alert('തെറ്റായ ഉത്തരം! വിക്കറ്റ് നഷ്ടമായി.');
-            }
-
-            gameState.balls++;
-            if(gameState.balls >= 6) {
-                gameState.balls = 0;
-                gameState.currentOver++;
-                // Strike rotation on over end
-                gameState.strike = gameState.strike === 1 ? 3 : 1;
-            }
-
-            if(gameState.currentOver > 20 || gameState.wickets >= gameState.teamSize) {
-                alert(`കളി završiti! ടോട്ടൽ സ്കോർ: ${gameState.score}`);
-                location.reload();
-            } else {
-                loadQuestion();
-            }
-        }
-
-        function updateScoreboard() {
-            document.getElementById('scoreboard-display').innerHTML = `
-                <strong>കളിക്കാരൻ:</strong> ${gameState.playerName} | 
-                <strong>സ്കോർ:</strong> ${gameState.score}/${gameState.wickets} <br>
-                <strong>ഓവർ:</strong> ${Math.floor(gameState.currentOver)}.${gameState.balls} | 
-                <strong>സ്ട്രൈക്ക്:</strong> പ്ലെയർ ${gameState.strike}
-            `;
-        }
-    </script>
-</body>
-</html>
+function rejoinRoom(){
+  const savedRoom=localStorage.getItem('quizRoom');
+  const savedName=localStorage.getItem('quizName');
+  if(!savedRoom)return alert("മുമ്പ് ജോയിൻ ചെയ്ത റൂം ഇല്ല");
+  playerName=savedName||"Player";
+  roomId=savedRoom;
+  gameRef=db.ref("rooms/"+roomId);
+  gameRef.once("value",snap=>{
+    if(!snap.exists())return alert("റൂം കണ്ടെത്തിയില്ല");
+    const d=snap.val();
+    let existingId=null;
+    Object.entries(d.players||{}).forEach(([id,p])=>{
+      if(p.name===playerName)existingId=id;
