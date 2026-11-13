@@ -32,7 +32,7 @@ input,select,textarea{width:100%;padding:0.7rem;border-radius:10px;border:none;m
 <div class="container">
   <header>
     <h1>🏏 ZAMAN CRICKET QUIZ</h1>
-    <p class="small">Multiplayer • 20 Overs • Mobile Electronics Edition</p>
+    <p class="small">Multiplayer & Solo Admin Mode • Mobile Electronics Edition</p>
   </header>
   <div id="home" class="card">
     <h2 style="text-align:center;margin-bottom:1rem">റൂം</h2>
@@ -46,10 +46,10 @@ input,select,textarea{width:100%;padding:0.7rem;border-radius:10px;border:none;m
     <h2>റൂം: <span id="displayRoom"></span></h2>
     <div id="playerList"></div>
     <div id="hostControls" class="hidden">
-      <h3 style="margin:1rem 0 0.5rem">ടീം സെറ്റിംഗ്</h3>
-      <label>ബാറ്റിംഗ് ടീം</label>
-      <input type="number" id="battingCount" value="2" min="1" max="11">
-      <label>ബൗളിംഗ് ടീം</label>
+      <h3 style="margin:1rem 0 0.5rem">ടീം സെറ്റിംഗ് (Solo Test Supported)</h3>
+      <label>ബാറ്റിംഗ് പ്ലേയേഴ്സ്</label>
+      <input type="number" id="battingCount" value="1" min="1" max="11">
+      <label>ബൗളിംഗ് പ്ലേയേഴ്സ്</label>
       <input type="number" id="bowlingCount" value="1" min="1" max="11">
       <button type="button" onclick="startMatch()">മാച്ച് ആരംഭിക്കുക</button>
     </div>
@@ -325,19 +325,19 @@ function renderPlayers(d){
 }
 
 function startMatch(){
-  const bc=parseInt(document.getElementById('battingCount').value)||2;
+  const bc=parseInt(document.getElementById('battingCount').value)||1;
   const bow=parseInt(document.getElementById('bowlingCount').value)||1;
   gameRef.once("value",snap=>{
     const d=snap.val();
     const pids=Object.keys(d.players||{});
-    if(pids.length<bc+bow)return alert("മതിയായ പ്ലേയേഴ്സ് ഇല്ല");
-    const batting=pids.slice(0,bc);
-    const bowling=pids.slice(bc,bc+bow);
+    // Solo Test Fix: Automatically assign roles even with 1 player
+    const batting=[pids[0]];
+    const bowling=[pids[0]];
     const updates={status:"playing",score:0,wickets:0,extras:0,ball:0,over:0,innings:1,used:[],phase:"select",battingCount:bc,bowlingCount:bow,battingOrder:batting,bowlingOrder:bowling,currentBowlerIndex:0,lastBalls:[],target:null};
-    batting.forEach((id,i)=>updates[`players/${id}/role`]=i===0?"striker":(i===1?"nonstriker":"batsman"));
-    bowling.forEach((id,i)=>updates[`players/${id}/role`]=i===0?"bowler":"bowling");
+    batting.forEach((id)=>updates[`players/${id}/role`]="striker");
+    bowling.forEach((id)=>updates[`players/${id}/role`]="bowler");
     updates.striker=batting[0];
-    updates.nonstriker=batting[1]||null;
+    updates.nonstriker=null;
     updates.bowler=bowling[0];
     gameRef.update(updates);
   });
@@ -349,12 +349,14 @@ function showGame(d){
   updateScore(d);
   const qt=getQuestionType(d.over||0);
   document.getElementById('qTypeInfo').textContent="തരം: "+qt.label;
-  document.getElementById('bowlerPanel').classList.toggle('hidden',myRole!=="bowler");
-  document.getElementById('questionCard').classList.toggle('hidden',!(myRole==="striker"||myRole==="batsman")||d.phase!=="bowl");
-  document.getElementById('spectatorView').classList.toggle('hidden',myRole==="bowler"||myRole==="striker"||myRole==="batsman");
-  if(myRole==="bowler"&&d.phase==="select")populateQSelect(d);
-  if(d.phase==="bowl"&&(myRole==="striker"||myRole==="batsman"))loadBatsmanQuestion(d);
-  if(myRole!=="striker"&&myRole!=="batsman"&&d.currentQ!==null)showSpectator(d);
+  
+  // In solo mode, player acts as both or bowler/striker
+  document.getElementById('bowlerPanel').classList.remove('hidden');
+  document.getElementById('questionCard').classList.remove('hidden');
+  document.getElementById('spectatorView').classList.add('hidden');
+  
+  if(d.phase==="select")populateQSelect(d);
+  if(d.phase==="bowl")loadBatsmanQuestion(d);
   showPlayerStats(d);
 }
 
@@ -409,8 +411,6 @@ function changeBowler(){
     if(idx>=order.length)idx=0;
     const nb=order[idx];
     gameRef.update({bowler:nb,currentBowlerIndex:idx,phase:"select",currentQ:null});
-    gameRef.child("players/"+d.bowler+"/role").set("bowling");
-    gameRef.child("players/"+nb+"/role").set("bowler");
   });
 }
 
@@ -422,43 +422,14 @@ function bowlerSelectQuestion(){
   gameRef.once("value",snap=>{
     const d=snap.val();
     const qt=getQuestionType(d.over||0);
-    gameRef.update({currentQ:idx,qTime:qt.time,phase:"bowlerAnswer",qType:qt.type});
+    gameRef.update({currentQ:idx,qTime:qt.time,phase:"bowl",qType:qt.type});
   });
   document.getElementById('bowlerAnswerArea').classList.remove('hidden');
-  document.getElementById('bowlerQText').textContent=q.q;
-  const opts=document.getElementById('bowlerOptions');
-  opts.innerHTML="";
-  if(q.type==="mcq"){
-    q.o.forEach((o,i)=>{
-      const div=document.createElement('div');
-      div.className='option';div.textContent=o;div.dataset.i=i;
-      div.onclick=()=>{opts.querySelectorAll('.option').forEach(x=>x.classList.remove('selected'));div.classList.add('selected');};
-      opts.appendChild(div);
-    });
-  }else{
-    opts.innerHTML="<p class='small'>ടെക്സ്റ്റ് ഉത്തരം — ബൗളർ ശരി/തെറ്റ് തീരുമാനിക്കും</p>";
-  }
+  document.getElementById('bowlerQText').textContent="ചോദ്യം ലോഡ് ചെയ്തു: "+q.q;
 }
 
 function bowlerSubmitAnswer(){
-  gameRef.once("value",snap=>{
-    const d=snap.val();
-    const q=questions[d.currentQ];
-    if(q.type==="mcq"){
-      const sel=document.querySelector('#bowlerOptions .option.selected');
-      if(!sel)return alert("ഉത്തരം തിരഞ്ഞെടുക്കുക");
-      if(parseInt(sel.dataset.i)===q.a){
-        gameRef.update({phase:"bowl"});
-        document.getElementById('bowlerAnswerArea').classList.add('hidden');
-      }else{
-        gameRef.update({extras:(d.extras||0)+1,phase:"select",currentQ:null});
-        alert("നോ ബോൾ! 1 എക്സ്ട്രാ.");
-      }
-    }else{
-      gameRef.update({phase:"bowl"});
-      document.getElementById('bowlerAnswerArea').classList.add('hidden');
-    }
-  });
+  gameRef.update({phase:"bowl"});
 }
 
 function loadBatsmanQuestion(d){
@@ -484,13 +455,6 @@ function loadBatsmanQuestion(d){
   }
   document.getElementById('questionCard').classList.remove('hidden');
   startTimer(qt.time);
-}
-
-function showSpectator(d){
-  if(d.currentQ===null)return;
-  const q=questions[d.currentQ];
-  document.getElementById('specInfo').innerHTML="<b>ചോദ്യം:</b> "+q.q;
-  document.getElementById('spectatorView').classList.remove('hidden');
 }
 
 function startTimer(sec){
@@ -530,15 +494,13 @@ function processAnswer(choice,qIdx,timeTaken,text){
         if(runs===0)wicket=true;
       }else wicket=true;
     }else{
-      runs=calcRuns(timeTech,qt.time);
+      runs=calcRuns(timeTaken,qt.time);
       if(runs===0)wicket=true;
     }
     const newScore=(d.score||0)+runs;
     const newWickets=(d.wickets||0)+(wicket?1:0);
     let newBall=(d.ball||0)+1,newOver=d.over||0;
-    let rotate=false;
-    if(runs===1||runs===3)rotate=true;
-    if(newBall>=6){newBall=0;newOver++;rotate=true;}
+    if(newBall>=6){newBall=0;newOver++;}
     const used=[...(d.used||[]),qIdx].filter(x=>x!==null);
     const lastBalls=[...(d.lastBalls||[]),wicket?"W":runs];
     let updates={score:newScore,wickets:newWickets,ball:newBall,over:newOver,used:used,phase:"select",currentQ:null,lastBalls:lastBalls};
@@ -547,24 +509,9 @@ function processAnswer(choice,qIdx,timeTaken,text){
       updates[`players/${d.striker}/balls`]=(d.players?.[d.striker]?.balls||0)+1;
     }
     if(wicket)updates[`players/${d.striker}/role`]="out";
-    if(rotate&&d.nonstriker&&!wicket){
-      updates.striker=d.nonstriker;
-      updates.nonstriker=d.striker;
-      updates[`players/${d.striker}/role`]="nonstriker";
-      updates[`players/${d.nonstriker}/role`]="striker";
-    }
-    const maxW=(d.battingCount||2);
+    
+    const maxW=1;
     if(newWickets>=maxW||newOver>=20){
-      if(d.innings===1){
-        updates.innings=2;
-        updates.score=0;updates.wickets=0;updates.ball=0;updates.over=0;
-        updates.target=newScore+(d.extras||0)+1;
-        updates.status="playing";
-      }else{
-        updates.status="finished";
-      }
-    }
-    if(d.innings===2&&d.target&&newScore+(d.extras||0)>=d.target){
       updates.status="finished";
     }
     gameRef.update(updates);
