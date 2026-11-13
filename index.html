@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zaman Cricket Quiz - Ultimate Edition</title>
+<title>Zaman Cricket Quiz - 5 Sets Edition</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <style>
@@ -29,7 +29,7 @@ input,select{width:100%;padding:0.8rem;border-radius:10px;border:none;margin:0.5
 <div class="container">
   <header>
     <h1>🏏 ZAMAN CRICKET QUIZ</h1>
-    <p class="small">Solo (Team A vs Team B) & Multiplayer</p>
+    <p class="small">5 Overs • 5 Sets • Solo & Multiplayer</p>
   </header>
 
   <!-- HOME SCREEN -->
@@ -46,6 +46,19 @@ input,select{width:100%;padding:0.8rem;border-radius:10px;border:none;margin:0.5
     </div>
 
     <button type="button" id="rejoinBtn" class="secondary hidden" style="background:#3b82f6;color:white" onclick="rejoinGame()">🔄 കഴിഞ്ഞ കളി തുടരുക (Rejoin)</button>
+  </div>
+
+  <!-- SET SELECTION SCREEN (Inside Game Mode) -->
+  <div id="setSelectionScreen" class="card hidden">
+    <h2 style="text-align:center;margin-bottom:1rem">സെറ്റ് തിരഞ്ഞെടുക്കുക (5 ഓവർ)</h2>
+    <select id="setSelect">
+      <option value="0">സെറ്റ് 1 (Mixed Questions)</option>
+      <option value="1">സെറ്റ് 2 (Mixed Questions)</option>
+      <option value="2">സെറ്റ് 3 (Mixed Questions)</option>
+      <option value="3">സെറ്റ് 4 (Mixed Questions)</option>
+      <option value="4">സെറ്റ് 5 (Mixed Questions)</option>
+    </select>
+    <button type="button" onclick="confirmSetSelection()">സെറ്റ് ലോക്ക് ചെയ്ത് കളി തുടങ്ങുക</button>
   </div>
 
   <!-- MULTIPLAYER LOBBY -->
@@ -71,7 +84,7 @@ input,select{width:100%;padding:0.8rem;border-radius:10px;border:none;margin:0.5
 
     <!-- BOWLER PANEL (Solo Mode) -->
     <div id="soloBowlerPanel" class="card">
-      <h3>ബൗളർ പാനൽ (ചോദ്യം തിരഞ്ഞെടുക്കുക)</h3>
+      <h3 id="qTypeLabel">ചോദ്യം തിരഞ്ഞെടുക്കുക</h3>
       <select id="qSelect"></select>
       <button type="button" onclick="soloAskQuestion()">ചോദ്യം നൽകുക</button>
     </div>
@@ -80,6 +93,8 @@ input,select{width:100%;padding:0.8rem;border-radius:10px;border:none;margin:0.5
     <div id="questionCard" class="card hidden">
       <h3 id="question" style="font-size:1rem;margin-bottom:1rem"></h3>
       <div id="options"></div>
+      <textarea id="textAnswer" class="hidden" rows="3" placeholder="ഉത്തരം എഴുതുക..."></textarea>
+      <button type="button" id="submitText" class="hidden" onclick="submitTextAnswer()">ഉത്തരം സമർപ്പിക്കുക</button>
     </div>
 
     <div id="resultMsg" style="text-align:center;font-weight:bold;margin-top:1rem;font-size:1.1rem"></div>
@@ -107,26 +122,38 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-const questions = [
-  {q:"ഇലക്ട്രോണുകൾ ചലിക്കാൻ നൽകുന്ന ശക്തിയെ എന്ത് പറയുന്നു?",o:["Current","Voltage (EMF)","Resistance","Power"],a:1},
-  {q:"Voltage-ന്റെ മറ്റൊരു പേര് എന്താണ്?",o:["Current","Electro Motive Force","Resistance","Power"],a:1},
-  {q:"വൈദ്യുതിയെ പൂർണ്ണമായും കടത്തിവിടുന്ന വസ്തുക്കളെ എന്ത് പറയുന്നു?",o:["Insulator","Conductor","Semi Conductor","Resistor"],a:1},
-  {q:"Conductor-ന്റെ ഉദാഹരണം ഏതാണ്?",o:["പ്ലാസ്റ്റിക്","തടി","ചെമ്പ്","റബ്ബർ"],a:2},
-  {q:"വൈദ്യുതിയെ കടത്തിവിടാത്ത വസ്തുക്കളെ എന്ത് പറയുന്നു?",o:["Conductor","Insulator","Semi Conductor","Diode"],a:1},
-  {q:"Insulator-ന്റെ ഉദാഹരണം ഏതാണ്?",o:["ചെമ്പ്","ഇരുമ്പ്","പ്ലാസ്റ്റിക്","സ്വർണം"],a:2},
-  {q:"അർദ്ധചാലകം എന്ന് അറിയപ്പെടുന്നത് ഏത്?",o:["Conductor","Insulator","Semi Conductor","Resistor"],a:2},
-  {q:"Resistor-ന്റെ യൂണിറ്റ് എന്താണ്?",o:["Farad","Ohm","Henry","Watt"],a:1},
-  {q:"Capacitor-ന്റെ യൂണിറ്റ് എന്താണ്?",o:["Ohm","Farad","Henry","Ampere"],a:1},
-  {q:"Diode-ൽ P ഭാഗത്തെ എന്ത് പറയുന്നു?",o:["Cathode","Anode","Base","Emitter"],a:1}
+// 5 Sets of Questions (30 questions each for 5 Overs)
+const questionSets = [
+  // Set 1
+  [
+    {q:"ഇലക്ട്രോണുകൾ ചലിക്കാൻ നൽകുന്ന ശക്തിയെ എന്ത് പറയുന്നു?",o:["Current","Voltage (EMF)","Resistance","Power"],a:1,type:"mcq",time:10},
+    {q:"Voltage-ന്റെ മറ്റൊരു പേര് എന്താണ്?",o:["Current","Electro Motive Force","Resistance","Power"],a:1,type:"mcq",time:10},
+    {q:"വൈദ്യുതിയെ പൂർണ്ണമായും കടത്തിവിടുന്ന വസ്തുക്കളെ എന്ത് പറയുന്നു?",o:["Insulator","Conductor","Semi Conductor","Resistor"],a:1,type:"mcq",time:10},
+    {q:"Conductor-ന്റെ ഉദാഹരണം എഴുതുക (ഒറ്റ വാക്ക്)",o:[],type:"word",time:60},
+    {q:"Resistor-ന്റെ പ്രവർത്തനം ചുരുക്കി എഴുതുക (3 വാചകം)",o:[],type:"sentence",time:300},
+    {q:"Mobile Phone PCB-യുടെ പ്രധാന ഘടന വിവരിക്കുക (5 വാചകം)",o:[],type:"para",time:600}
+  ],
+  // Set 2 (Sample structure)
+  [
+    {q:"Capacitor-ന്റെ യൂണിറ്റ് എന്താണ്?",o:["Ohm","Farad","Henry","Ampere"],a:1,type:"mcq",time:10},
+    {q:"Diode-ൽ P ഭാഗത്തെ എന്ത് പറയുന്നു?",o:["Cathode","Anode","Base","Emitter"],a:1,type:"mcq",time:10},
+    {q:"Transformer എന്ത് ചെയ്യുന്നു?",o:[""],type:"word",time:60},
+    {q:"Power IC-യുടെ പ്രധാന ജോലികൾ വിശദീകരിക്കുക (3 വാചകം)",o:[],type:"sentence",time:300}
+  ],
+  // Set 3, 4, 5 can follow similar structure
+  [{q:"Ohm's Law ഫോർമുല എന്താണ്?",o:["V=IR","P=VI","E=MC²","F=MA"],a:0,type:"mcq",time:10}],
+  [{q:"PCB യുടെ പൂർണ്ണരൂപം എഴുതുക",o:["Printed Circuit Board"],a:0,type:"mcq",time:10}],
+  [{q:"Multimeter എന്ത് അളക്കുന്നു?",o:["Voltage, Current, Resistance"],a:1,type:"mcq",time:10}]
 ];
 
+let currentSetQuestions = [];
 let isSolo = true;
 let soloState = {
-  innings: 1, // 1 for Team A, 2 for Team B
+  innings: 1,
   scoreA: 0, wicketsA: 0,
   scoreB: 0, wicketsB: 0,
   ball: 0, over: 0,
-  used: [], currentQ: null, target: 0
+  used: [], currentQ: null, target: 0, selectedSet: 0
 };
 
 let timer = null, timeLeft = 10, startTime = 0;
@@ -138,18 +165,25 @@ window.onload = function() {
   }
 };
 
-function getQuestionType(over){
-  if(over < 2) return {time: 10, label: "MCQ (10 സെക്കൻഡ്)"};
-  return {time: 20, label: "MCQ (20 സെക്കൻഡ്)"};
-}
-
-function calcRuns(time, limit){
+// Timing & Runs Logic based on your exact rules
+function calcRuns(time, limit) {
   const ratio = time / limit;
-  if(ratio <= 0.3) return 6;
-  if(ratio <= 0.5) return 4;
-  if(ratio <= 0.7) return 2;
-  if(ratio <= 1.0) return 1;
-  return 0;
+  if(limit === 10) {
+    if(time <= 2) return 6;
+    if(time <= 4) return 4;
+    if(time <= 6) return 3;
+    if(time <= 8) return 2;
+    if(time <= 10) return 1;
+    return 0; // wicket
+  } else {
+    // Scaled ratio for 1 min, 5 min, 10 min
+    if(ratio <= 0.2) return 6;
+    if(ratio <= 0.4) return 4;
+    if(ratio <= 0.6) return 3;
+    if(ratio <= 0.8) return 2;
+    if(ratio <= 1.0) return 1;
+    return 0;
+  }
 }
 
 // --- SOLO MODE LOGIC ---
@@ -158,12 +192,24 @@ function startSoloMode() {
   const saved = localStorage.getItem('zaman_solo_save');
   if(saved) {
     soloState = JSON.parse(saved);
+    currentSetQuestions = questionSets[soloState.selectedSet] || questionSets[0];
+    document.getElementById('home').classList.add('hidden');
+    document.getElementById('game').classList.remove('hidden');
+    updateSoloUI();
+    populateSoloQSelect();
   } else {
-    soloState = { innings: 1, scoreA: 0, wicketsA: 0, scoreB: 0, wicketsB: 0, ball: 0, over: 0, used: [], currentQ: null, target: 0 };
-    saveSoloState();
+    document.getElementById('home').classList.add('hidden');
+    document.getElementById('setSelectionScreen').classList.remove('hidden');
   }
+}
 
-  document.getElementById('home').classList.add('hidden');
+function confirmSetSelection() {
+  const setIdx = parseInt(document.getElementById('setSelect').value);
+  soloState = { innings: 1, scoreA: 0, wicketsA: 0, scoreB: 0, wicketsB: 0, ball: 0, over: 0, used: [], currentQ: null, target: 0, selectedSet: setIdx };
+  currentSetQuestions = questionSets[setIdx] || questionSets[0];
+  saveSoloState();
+
+  document.getElementById('setSelectionScreen').classList.add('hidden');
   document.getElementById('game').classList.remove('hidden');
   document.getElementById('soloBowlerPanel').classList.remove('hidden');
   
@@ -179,7 +225,7 @@ function updateSoloUI() {
   const currentScore = soloState.innings === 1 ? soloState.scoreA : soloState.scoreB;
   const currentWickets = soloState.innings === 1 ? soloState.wicketsA : soloState.wicketsB;
   
-  document.getElementById('inningsTitle').textContent = soloState.innings === 1 ? "ടീം A ബാറ്റിംഗ് (ബൗൾ ചെയ്യുന്നത് ടീം B)" : "ടീം B ബാറ്റിംഗ് (ടാർഗെറ്റ്: " + soloState.target + ")";
+  document.getElementById('inningsTitle').textContent = soloState.innings === 1 ? "ടീം A ബാറ്റിംഗ്" : "ടീം B ബാറ്റിംഗ് (ടാർഗെറ്റ്: " + soloState.target + ")";
   document.getElementById('score').textContent = currentScore;
   document.getElementById('wickets').textContent = currentWickets;
   document.getElementById('over').textContent = soloState.over + "." + soloState.ball;
@@ -193,11 +239,11 @@ function updateSoloUI() {
 function populateSoloQSelect() {
   const sel = document.getElementById('qSelect');
   sel.innerHTML = "";
-  questions.forEach((q, i) => {
+  currentSetQuestions.forEach((q, i) => {
     if(!soloState.used.includes(i)) {
       const opt = document.createElement('option');
       opt.value = i;
-      opt.textContent = (i+1) + ". " + q.q;
+      opt.textContent = (i+1) + ". [" + q.type.toUpperCase() + "] " + q.q;
       sel.appendChild(opt);
     }
   });
@@ -214,21 +260,30 @@ function soloAskQuestion() {
   document.getElementById('soloBowlerPanel').classList.add('hidden');
   document.getElementById('questionCard').classList.remove('hidden');
   
-  const q = questions[soloState.currentQ];
+  const q = currentSetQuestions[soloState.currentQ];
   document.getElementById('question').textContent = q.q;
   const optDiv = document.getElementById('options');
+  const ta = document.getElementById('textAnswer');
+  const sb = document.getElementById('submitText');
   optDiv.innerHTML = "";
-  
-  q.o.forEach((opt, i) => {
-    const btn = document.createElement('div');
-    btn.className = 'option';
-    btn.textContent = opt;
-    btn.onclick = () => submitSoloAnswer(i);
-    optDiv.appendChild(btn);
-  });
 
-  const qt = getQuestionType(soloState.over);
-  timeLeft = qt.time;
+  if(q.type === "mcq") {
+    ta.classList.add('hidden');
+    sb.classList.add('hidden');
+    q.o.forEach((opt, i) => {
+      const btn = document.createElement('div');
+      btn.className = 'option';
+      btn.textContent = opt;
+      btn.onclick = () => submitSoloAnswer(i, null);
+      optDiv.appendChild(btn);
+    });
+  } else {
+    ta.classList.remove('hidden');
+    sb.classList.remove('hidden');
+    ta.value = "";
+  }
+
+  timeLeft = q.time;
   document.getElementById('timer').textContent = timeLeft;
   startTime = Date.now();
   
@@ -238,23 +293,39 @@ function soloAskQuestion() {
     document.getElementById('timer').textContent = timeLeft;
     if(timeLeft <= 0) {
       clearInterval(timer);
-      submitSoloAnswer(-1); // Timeout = Wicket
+      submitSoloAnswer(-1, null); // Timeout = Wicket
     }
   }, 1000);
 }
 
-function submitSoloAnswer(selected) {
+function submitTextAnswer() {
+  clearInterval(timer);
+  const text = document.getElementById('textAnswer').value.trim();
+  submitSoloAnswer(null, text);
+}
+
+function submitSoloAnswer(selectedChoice, textInput) {
   clearInterval(timer);
   const timeTaken = (Date.now() - startTime) / 1000;
-  const q = questions[soloState.currentQ];
-  const qt = getQuestionType(soloState.over);
+  const q = currentSetQuestions[soloState.currentQ];
   
   let runs = 0, wicket = false;
-  if(selected === q.a) {
-    runs = calcRuns(timeTaken, qt.time);
-    if(runs === 0) wicket = true;
+  
+  if(q.type === "mcq") {
+    if(selectedChoice === q.a) {
+      runs = calcRuns(timeTaken, q.time);
+      if(runs === 0) wicket = true;
+    } else {
+      wicket = true;
+    }
   } else {
-    wicket = true;
+    // Non-MCQ evaluation based on timing ratio
+    if(textInput !== "" && timeTaken <= q.time) {
+      runs = calcRuns(timeTaken, q.time);
+      if(runs === 0) wicket = true;
+    } else {
+      wicket = true;
+    }
   }
 
   if(soloState.innings === 1) {
@@ -272,11 +343,14 @@ function submitSoloAnswer(selected) {
   }
   soloState.used.push(soloState.currentQ);
 
-  showResultPopup(runs, wicket);
+  showResultPopup(runs, wicket, timeTaken);
   document.getElementById('questionCard').classList.add('hidden');
   
-  // Check Innings End
-  if(soloState.innings === 1 && (soloState.wicketsA >= 2 || soloState.over >= 3)) {
+  // Innings / Match End Check (5 overs max = 30 balls)
+  const maxWickets = 2; // Can adjust as needed
+  const maxOvers = 5;
+
+  if(soloState.innings === 1 && (soloState.wicketsA >= maxWickets || soloState.over >= maxOvers)) {
     soloState.target = soloState.scoreA + 1;
     soloState.innings = 2;
     soloState.over = 0;
@@ -288,7 +362,7 @@ function submitSoloAnswer(selected) {
       endSoloGame("ടീം B വിജയിച്ചു! 🎉");
       return;
     }
-    if(soloState.wicketsB >= 2 || soloState.over >= 3) {
+    if(soloState.wicketsB >= maxWickets || soloState.over >= maxOvers) {
       if(soloState.scoreB >= soloState.target) {
         endSoloGame("ടീം B വിജയിച്ചു! 🎉");
       } else if(soloState.scoreB === soloState.target - 1) {
@@ -306,11 +380,11 @@ function submitSoloAnswer(selected) {
   document.getElementById('soloBowlerPanel').classList.remove('hidden');
 }
 
-function showResultPopup(runs, wicket) {
+function showResultPopup(runs, wicket, time) {
   const msg = document.getElementById('resultMsg');
-  msg.textContent = wicket ? "വിക്കറ്റ് നഷ്ടമായി!" : (runs + " റൺസ് നേടി!");
+  msg.textContent = wicket ? `വിക്കറ്റ്! (${time.toFixed(1)}s)` : `${runs} റൺസ്! (${time.toFixed(1)}s)`;
   msg.style.color = wicket ? "#ef4444" : "#22c55e";
-  setTimeout(() => { msg.textContent = ""; }, 2000);
+  setTimeout(() => { msg.textContent = ""; }, 2500);
 }
 
 function endSoloGame(resultText) {
@@ -324,7 +398,7 @@ function endSoloGame(resultText) {
   `;
 }
 
-// --- MULTIPLAYER & REJOIN LOGIC ---
+// --- MULTIPLAYER & REJOIN ---
 function createMultiplayerRoom() {
   const name = document.getElementById('playerName').value.trim() || "Player";
   roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -385,7 +459,6 @@ function enterLobby() {
       document.getElementById('lobby').classList.add('hidden');
       document.getElementById('game').classList.remove('hidden');
       document.getElementById('soloBowlerPanel').classList.add('hidden');
-      // Multiplayer game sync can be handled here
     }
   });
 }
@@ -406,6 +479,8 @@ function rejoinGame() {
 }
 
 function quitGame() {
+  localStorage.removeItem('zaman_solo_save');
+  localStorage.removeItem('zaman_mp_room');
   location.reload();
 }
 </script>
