@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zaman Cricket Quiz - Multiplayer Edition</title>
+<title>Zaman Cricket Quiz - Multiplayer & Auto-Rejoin</title>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <style>
@@ -28,7 +28,7 @@ input,select{width:100%;padding:0.8rem;border-radius:10px;border:none;margin:0.5
 <div class="container">
   <header>
     <h1>🌐 ZAMAN MULTIPLAYER</h1>
-    <p class="small">5 Overs • 5 Sets • Toss & Live Sync</p>
+    <p class="small">Auto-Rejoin • 5 Overs • 5 Sets</p>
   </header>
 
   <!-- HOME / JOIN SCREEN -->
@@ -40,6 +40,8 @@ input,select{width:100%;padding:0.8rem;border-radius:10px;border:none;margin:0.5
       <input id="roomCodeInput" placeholder="റൂം കോഡ് നൽകുക" maxlength="6" style="text-transform:uppercase">
       <button type="button" class="secondary" onclick="joinRoom()">റൂമിൽ ജോയിൻ ചെയ്യുക</button>
     </div>
+    <!-- Rejoin Button linked with rejoin.js -->
+    <button type="button" id="rejoinBtn" class="secondary hidden" style="background:#3b82f6;color:white" onclick="autoRejoin()">🔄 കഴിഞ്ഞ കളി തുടരുക (Auto Rejoin)</button>
   </div>
 
   <!-- LOBBY SCREEN -->
@@ -108,14 +110,7 @@ input,select{width:100%;padding:0.8rem;border-radius:10px;border:none;margin:0.5
       <p>കളിക്കാർ മത്സരിക്കുന്നത് തത്സമയം കാണുക...</p>
     </div>
 
-    <div id="resultPopup" style="text-align:center;font-weight:bold;margin-top:1rem;font-size:1.2rem"></div>
-  </div>
-
-  <!-- SUMMARY SCREEN -->
-  <div id="summaryScreen" class="card hidden">
-    <h2 style="text-align:center;color:#facc15">🏆 മാച്ച് ഫലം</h2>
-    <div id="summaryContent" style="margin:1rem 0;font-size:1.1rem;line-height:1.6;text-align:center"></div>
-    <button type="button" onclick="location.reload()">ഹോം പേജിലേക്ക്</button>
+    <button type="button" class="secondary" style="background:#ef4444;color:white;margin-top:1.5rem" onclick="quitGame()">പുറത്തേക്ക് പോവുക (Quit)</button>
   </div>
 </div>
 
@@ -132,7 +127,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// 5 Sets of Questions Data Structure
 const questionSets = [
   [
     {q:"ഇലക്ട്രോണുകൾ ചലിക്കാൻ നൽകുന്ന ശക്തിയെ എന്ത് പറയുന്നു?",o:["Current","Voltage (EMF)","Resistance","Power"],a:1,type:"mcq",time:10},
@@ -148,7 +142,7 @@ const questionSets = [
 ];
 
 let roomId = null, playerId = null, playerName = "", roomRef = null;
-let myRole = ""; // host, guest, spectator
+let myRole = ""; 
 let timerInterval = null, startTime = 0;
 
 function createRoom() {
@@ -159,6 +153,10 @@ function createRoom() {
   playerId = "p_" + Date.now();
   myRole = "host";
 
+  // LocalStorage-ൽ സേവ് ചെയ്യുന്നു
+  localStorage.setItem('zaman_mp_room', roomId);
+  localStorage.setItem('zaman_mp_player', playerId);
+
   roomRef = db.ref("rooms/" + roomId);
   roomRef.set({
     host: playerId,
@@ -168,7 +166,7 @@ function createRoom() {
     }
   });
 
-  enterLobby();
+  setupRoomListeners();
 }
 
 function joinRoom() {
@@ -177,25 +175,25 @@ function joinRoom() {
   if(!playerName || !roomId) return alert("പേരും റൂം കോഡും നൽകുക");
 
   playerId = "p_" + Date.now();
-  roomRef = db.ref("rooms/" + roomId);
+  
+  // LocalStorage-ൽ സേവ് ചെയ്യുന്നു
+  localStorage.setItem('zaman_mp_room', roomId);
+  localStorage.setItem('zaman_mp_player', playerId);
 
+  roomRef = db.ref("rooms/" + roomId);
   roomRef.once("value", snap => {
     if(!snap.exists()) return alert("ഇത്തരത്തിലുള്ള റൂം നിലവിലില്ല!");
     const data = snap.val();
     const playerCount = Object.keys(data.players || {}).length;
     
-    if(playerCount >= 2) {
-      myRole = "spectator";
-    } else {
-      myRole = "guest";
-    }
+    myRole = (playerCount >= 2) ? "spectator" : "guest";
 
     roomRef.child("players/" + playerId).set({ name: playerName, role: myRole });
-    enterLobby();
+    setupRoomListeners();
   });
 }
 
-function enterLobby() {
+function setupRoomListeners() {
   document.getElementById('homeScreen').classList.add('hidden');
   document.getElementById('lobbyScreen').classList.remove('hidden');
   document.getElementById('displayRoom').textContent = roomId;
@@ -215,24 +213,23 @@ function enterLobby() {
       document.getElementById('waitingMsg').classList.add('hidden');
     }
 
-    if(data.status === "toss" && document.getElementById('lobbyScreen').classList.contains('hidden') === false) {
+    if(data.status === "toss") {
       startTossPhase(data);
-    }
-    if(data.status === "set_selection") {
+    } else if(data.status === "set_selection") {
       startSetSelectionPhase(data);
-    }
-    if(data.status === "playing") {
+    } else if(data.status === "playing") {
       startLiveGame(data);
     }
   });
 }
 
 function startMatchSetup() {
-  roomRef.update({ status: "toss", tossCaller: playerId });
+  roomRef.update({ status: "toss" });
 }
 
 function startTossPhase(data) {
   document.getElementById('lobbyScreen').classList.add('hidden');
+  document.getElementById('setScreen').classList.add('hidden');
   document.getElementById('tossScreen').classList.remove('hidden');
 
   if(data.host === playerId) {
@@ -262,7 +259,7 @@ function startSetSelectionPhase(data) {
 
   const isWinner = data.tossWinner === playerId;
   if(isWinner) {
-    document.getElementById('setChooserMsg').textContent = "അഭിനന്ദനങ്ങൾ! നിങ്ങൾ ടോസ് വിജയിച്ചു. ആവശ്യമുള്ള സെറ്റ് തിരഞ്ഞെടുക്കുക:";
+    document.getElementById('setChooserMsg').textContent = "അഭിനന്ദനങ്ങൾ! നിങ്ങൾ ടോസ് വിജയിച്ചു. സെറ്റ് തിരഞ്ഞെടുക്കുക:";
     document.getElementById('lockSetBtn').classList.remove('hidden');
     document.getElementById('waitSetMsg').classList.add('hidden');
   } else {
@@ -279,27 +276,22 @@ function lockSet() {
     scoreA: 0, wicketsA: 0,
     scoreB: 0, wicketsB: 0,
     over: 0, ball: 0,
-    battingTeam: roomRef.child("host") === playerId ? "host" : "guest",
     currentQuestion: null
   });
 }
 
 function startLiveGame(data) {
   document.getElementById('setScreen').classList.add('hidden');
+  document.getElementById('tossScreen').classList.add('hidden');
+  document.getElementById('lobbyScreen').classList.add('hidden');
   document.getElementById('gameScreen').classList.remove('hidden');
 
-  // Update Scoreboard UI
   document.getElementById('score').textContent = data.innings === 1 ? data.scoreA : data.scoreB;
   document.getElementById('wickets').textContent = data.innings === 1 ? data.wicketsA : data.wicketsB;
   document.getElementById('over').textContent = data.over + "." + data.ball;
   document.getElementById('inningsTitle').textContent = data.innings === 1 ? "ടീം A ബാറ്റിംഗ്" : "ടീം B ബാറ്റിംഗ്";
 
-  // Role Assignment logic in Multiplayer
-  const players = Object.keys(data.players || {});
   const isHost = data.host === playerId;
-  
-  // Alternating Bowler/Batsman based on turn or simple assignment
-  // For simplicity: Host is Bowler in Innings 1, Guest is Batsman (and vice versa)
   let isMyTurnToBat = (data.innings === 1 && !isHost) || (data.innings === 2 && isHost);
 
   if(myRole === "spectator") {
@@ -310,10 +302,11 @@ function startLiveGame(data) {
   if(isMyTurnToBat) {
     document.getElementById('bowlerPanel').classList.add('hidden');
     document.getElementById('actionPanel').classList.remove('hidden');
-    if(data.currentQuestion) {
+    if(data.currentQuestion !== null && data.currentQuestion !== undefined) {
       renderActiveQuestion(data.currentQuestion, data.selectedSet);
     } else {
       document.getElementById('questionText').textContent = "ബൗളർ ചോദ്യം നൽകുന്നത് വരെ കാത്തിരിക്കുക...";
+      document.getElementById('optionsContainer').innerHTML = "";
     }
   } else {
     document.getElementById('bowlerPanel').classList.remove('hidden');
@@ -341,6 +334,7 @@ function sendQuestion() {
 
 function renderActiveQuestion(qIdx, setIdx) {
   const q = questionSets[setIdx][qIdx];
+  if(!q) return;
   document.getElementById('questionText').textContent = q.q;
   const optCont = document.getElementById('optionsContainer');
   optCont.innerHTML = "";
@@ -355,13 +349,12 @@ function renderActiveQuestion(qIdx, setIdx) {
       const btn = document.createElement('div');
       btn.className = 'option';
       btn.textContent = optText;
-      btn.onclick = () => submitAnswer(i, null, q);
+      btn.onclick = () => submitAnswer();
       optCont.appendChild(btn);
     });
   } else {
     ta.classList.remove('hidden');
     sb.classList.remove('hidden');
-    ta.value = "";
   }
 
   startTime = Date.now();
@@ -374,18 +367,17 @@ function renderActiveQuestion(qIdx, setIdx) {
     document.getElementById('timer').textContent = timeLeft;
     if(timeLeft <= 0) {
       clearInterval(timerInterval);
-      submitAnswer(-1, "TIMEOUT", q);
+      submitAnswer();
     }
   }, 1000);
 }
 
-function submitAnswer(choiceIdx = null, textVal = null, qObj = null) {
+function submitAnswer() {
   clearInterval(timerInterval);
   const timeTaken = (Date.now() - startTime) / 1000;
   
-  // Calculate runs using exact timing slam ratio
   let runs = 0, wicket = false;
-  if(choiceIdx === -1 || timeTaken > 10.01) {
+  if(timeTaken > 10.01) {
     wicket = true;
   } else {
     if(timeTaken <= 2) runs = 6;
@@ -396,7 +388,6 @@ function submitAnswer(choiceIdx = null, textVal = null, qObj = null) {
     else wicket = true;
   }
 
-  // Update Firebase State
   roomRef.once("value", snap => {
     const d = snap.val();
     let scoreA = d.scoreA || 0, wicketsA = d.wicketsA || 0;
@@ -417,7 +408,6 @@ function submitAnswer(choiceIdx = null, textVal = null, qObj = null) {
       over++;
     }
 
-    // Innings Change condition (5 overs = 30 balls max)
     if(innings === 1 && (over >= 5 || wicketsA >= 2)) {
       innings = 2;
       over = 0;
@@ -431,5 +421,8 @@ function submitAnswer(choiceIdx = null, textVal = null, qObj = null) {
   });
 }
 </script>
+
+<!-- Rejoin JavaScript File Link -->
+<script src="rejoin.js"></script>
 </body>
 </html>
