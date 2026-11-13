@@ -3,118 +3,128 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zaman Cricket Quiz - Multiplayer & Auto-Rejoin</title>
+<title>Zaman Cricket Quiz - Multiplayer</title>
+<!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="questions.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;padding:1rem}
-.container{max-width:520px;margin:0 auto}
+body{font-family:system-ui,'Noto Sans Malayalam',sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh}
+.container{max-width:520px;margin:0 auto;padding:1rem}
 header{text-align:center;padding:1rem 0}
 h1{color:#22c55e;font-size:1.4rem}
 .card{background:#1e293b;border-radius:16px;padding:1.2rem;margin:0.8rem 0}
-button{background:#22c55e;color:#0f172a;border:none;padding:0.8rem;border-radius:10px;font-weight:700;width:100%;margin:0.5rem 0;font-size:1rem;cursor:pointer}
+button{background:#22c55e;color:#0f172a;border:none;padding:0.7rem 1.2rem;border-radius:10px;font-weight:700;width:100%;margin:0.3rem 0;font-size:1rem;cursor:pointer}
 button.secondary{background:#334155;color:#e2e8f0}
-input,select{width:100%;padding:0.8rem;border-radius:10px;border:none;margin:0.5rem 0;font-size:1rem;background:#334155;color:white}
+button.solo{background:#3b82f6;color:white}
+input,select,textarea{width:100%;padding:0.7rem;border-radius:10px;border:none;margin:0.3rem 0;font-size:1rem;background:#334155;color:white}
 .option{background:#334155;padding:0.8rem;margin:0.4rem 0;border-radius:10px;cursor:pointer;border:2px solid transparent}
-.option:hover{background:#475569}
+.option.selected{background:#475569;border-color:#22c55e}
+.scoreboard{display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.4rem}
+.timer{font-size:2rem;text-align:center;color:#facc15;font-weight:700}
 .hidden{display:none}
-.scoreboard{display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.3rem}
-.timer{font-size:2.5rem;text-align:center;color:#facc15;font-weight:700;margin:0.5rem 0}
 .small{font-size:0.8rem;color:#94a3b8}
+.role{font-size:0.7rem;background:#22c55e;color:#0f172a;padding:0.1rem 0.4rem;border-radius:10px;margin-left:0.3rem}
+.stats{font-size:0.85rem;background:#0f172a;padding:0.5rem;border-radius:8px;margin-top:0.5rem}
 </style>
 </head>
 <body>
 <div class="container">
   <header>
-    <h1>🌐 ZAMAN MULTIPLAYER</h1>
-    <p class="small">Auto-Rejoin • 5 Overs • 5 Sets</p>
+    <h1>🏏 ZAMAN CRICKET QUIZ</h1>
+    <p class="small">Multiplayer & Solo Mode</p>
   </header>
 
-  <!-- HOME / JOIN SCREEN -->
-  <div id="homeScreen" class="card">
-    <h2 style="text-align:center;margin-bottom:1rem">മൾട്ടിപ്ലെയർ ലോബി</h2>
-    <input id="playerName" placeholder="നിങ്ങളുടെ പേര് നൽകുക" maxlength="20">
-    <button type="button" onclick="createRoom()">റൂം സൃഷ്ടിക്കുക (Create Room)</button>
-    <div style="margin:1rem 0;border-top:1px solid #334155;padding-top:1rem;">
-      <input id="roomCodeInput" placeholder="റൂം കോഡ് നൽകുക" maxlength="6" style="text-transform:uppercase">
-      <button type="button" class="secondary" onclick="joinRoom()">റൂമിൽ ജോയിൻ ചെയ്യുക</button>
-    </div>
-    <!-- Rejoin Button -->
-    <button type="button" id="rejoinBtn" class="secondary hidden" style="background:#3b82f6;color:white" onclick="autoRejoin()">🔄 കഴിഞ്ഞ കളി തുടരുക (Auto Rejoin)</button>
+  <!-- HOME SCREEN -->
+  <div id="home" class="card">
+    <h2 style="text-align:center;margin-bottom:1rem">തുടങ്ങാം</h2>
+    <input id="playerName" placeholder="നിങ്ങളുടെ പേര്" maxlength="20">
+    <input id="teamName" placeholder="ടീമിന്റെ പേര് (ഉദാ: ചെന്നൈ സൂപ്പർ കിംഗ്സ്)" maxlength="25">
+    <button onclick="createRoom()">പുതിയ റൂം സൃഷ്ടിക്കുക (Host)</button>
+    <input id="roomCode" placeholder="റൂം കോഡ്" maxlength="6" style="text-transform:uppercase">
+    <button class="secondary" onclick="joinRoom()">റൂമിൽ ജോയിൻ ചെയ്യുക</button>
+    <button class="secondary" onclick="rejoinRoom()">ഓട്ടോ റീജോയിൻ</button>
+    <button class="solo" onclick="startSoloGame()">സോളോ ഗെയിം (Solo Mode)</button>
   </div>
 
   <!-- LOBBY SCREEN -->
-  <div id="lobbyScreen" class="card hidden">
+  <div id="lobby" class="card hidden">
     <h2>റൂം കോഡ്: <span id="displayRoom" style="color:#facc15"></span></h2>
-    <div id="playerList" style="margin:1rem 0;line-height:1.6"></div>
+    <div id="playerList" style="margin:1rem 0"></div>
     <div id="hostControls" class="hidden">
-      <button type="button" onclick="startMatchSetup()">മാച്ച് ആരംഭിക്കുക</button>
+      <h3 style="margin:1rem 0 0.5rem">സെറ്റ് & ടീം സെറ്റിംഗ്സ്</h3>
+      <label>ചോദ്യ സെറ്റ് തിരഞ്ഞെടുക്കുക</label>
+      <select id="setSelect">
+        <option value="OPTIONAL QUESTIONS 1">OPTIONAL QUESTIONS 1</option>
+        <option value="OPTIONAL QUESTIONS 2">OPTIONAL QUESTIONS 2</option>
+      </select>
+      <label>ബാറ്റിംഗ് ടീം അംഗങ്ങളുടെ എണ്ണം</label>
+      <input type="number" id="battingCount" value="2" min="1" max="11">
+      <label>ബൗളിംഗ് ടീം അംഗങ്ങളുടെ എണ്ണം</label>
+      <input type="number" id="bowlingCount" value="1" min="1" max="11">
+      <button onclick="startMatch()">മാച്ച് ആരംഭിക്കുക</button>
     </div>
     <p class="small" id="waitingMsg">ഹോസ്റ്റ് മാച്ച് ആരംഭിക്കുന്നത് വരെ കാത്തിരിക്കുക...</p>
   </div>
 
-  <!-- TOSS SCREEN -->
-  <div id="tossScreen" class="card hidden">
-    <h2 style="text-align:center">🪙 ടോസ് ഘട്ടം</h2>
-    <div id="tossContainer" style="text-align:center;margin:1.5rem 0">
-      <p id="tossMsg">ഹോസ്റ്റ് ടോസ് ചെയ്യുന്നു...</p>
-      <div id="tossButtons" class="hidden">
-        <button type="button" onclick="performToss('Heads')">ഹെഡ്സ് (Heads)</button>
-        <button type="button" class="secondary" onclick="performToss('Tails')">ടെയിൽസ് (Tails)</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- SET SELECTION SCREEN -->
-  <div id="setScreen" class="card hidden">
-    <h2 style="text-align:center;margin-bottom:1rem">സെറ്റ് തിരഞ്ഞെടുക്കുക (5 ഓവർ)</h2>
-    <p id="setChooserMsg" class="small" style="text-align:center;margin-bottom:0.8rem"></p>
-    <select id="setSelect">
-      <option value="0">സെറ്റ് 1 (Mixed Questions - 30 Qs)</option>
-      <option value="1">സെറ്റ് 2 (Mixed Questions - 30 Qs)</option>
-      <option value="2">സെറ്റ് 3 (Mixed Questions - 30 Qs)</option>
-      <option value="3">സെറ്റ് 4 (Mixed Questions - 30 Qs)</option>
-      <option value="4">സെറ്റ് 5 (Mixed Questions - 30 Qs)</option>
-    </select>
-    <button type="button" id="lockSetBtn" class="hidden" onclick="lockSet()">സെറ്റ് ലോക്ക് ചെയ്ത് കളി തുടങ്ങുക</button>
-    <p class="small" id="waitSetMsg" style="text-align:center;margin-top:0.8rem">ടോസ് ജയിച്ചയാൾ സെറ്റ് തിരഞ്ഞെടുക്കുന്നത് വരെ കാത്തിരിക്കുക...</p>
-  </div>
-
   <!-- GAME SCREEN -->
-  <div id="gameScreen" class="card hidden">
-    <div class="scoreboard">
-      <div>ഇന്നിങ്സ്: <b id="inningsTitle">ടീം A ബാറ്റിംഗ്</b></div>
-      <div>സ്കോർ: <b id="score">0</b>/<b id="wickets">0</b></div>
-      <div>ഓവർ: <b id="over">0.0</b></div>
+  <div id="game" class="hidden">
+    <div class="card" style="background:#0f172a;border:1px solid #334155">
+      <div class="scoreboard">
+        <div>സ്കോർ: <b id="score">0</b>/<b id="wickets">0</b></div>
+        <div>ഓവർ: <b id="over">0.0</b></div>
+        <div>എക്സ്ട്രാ: <b id="extras">0</b></div>
+        <div>RR: <b id="rr">0.00</b></div>
+      </div>
+      <div id="targetInfo" class="small" style="color:#facc15;margin-bottom:0.3rem"></div>
+      <div class="small">ബാറ്റ്സ്മാൻ: <span id="striker" style="color:#22c55e;font-weight:bold"></span> | ബൗളർ: <span id="bowler" style="color:#ef4444;font-weight:bold"></span></div>
+      <div id="lastBalls" class="small" style="margin-top:0.3rem"></div>
     </div>
+
+    <div class="timer" id="timer">10</div>
 
     <!-- BOWLER PANEL -->
-    <div id="bowlerPanel" class="card hidden" style="background:#0f172a">
-      <h3 style="color:#22c55e;margin-bottom:0.5rem">ബൗളർ പാനൽ: ചോദ്യം നൽകുക</h3>
-      <select id="questionSelect"></select>
-      <button type="button" onclick="sendQuestion()">ചോദ്യം അയക്കുക</button>
+    <div id="bowlerPanel" class="card hidden">
+      <h3>ബൗളർ പാനൽ</h3>
+      <button class="secondary" onclick="changeBowler()">അടുത്ത ബൗളറെ മാറ്റുക</button>
+      <label style="margin-top:0.5rem;display:block">ഒരു ബോളിനുള്ള ചോദ്യം തിരഞ്ഞെടുക്കുക:</label>
+      <select id="qSelect"></select>
+      <button onclick="bowlerSelectQuestion()" style="margin-top:0.5rem">ചോദ്യം ലോക്ക് ചെയ്യുക</button>
+      <div id="bowlerAnswerArea" class="hidden" style="margin-top:1rem;border-top:1px solid #334155;padding-top:0.8rem">
+        <p id="bowlerQText" style="font-weight:bold;margin-bottom:0.5rem"></p>
+        <div id="bowlerOptions"></div>
+        <button onclick="bowlerSubmitAnswer()" style="margin-top:0.5rem">ബൗളർ ഉത്തരം സമർപ്പിക്കുക</button>
+      </div>
     </div>
 
-    <!-- BATSMAN / SPECTATOR PANEL -->
-    <div id="actionPanel" class="card hidden" style="background:#0f172a">
-      <div class="timer" id="timer">10</div>
-      <h3 id="questionText" style="margin-bottom:1rem;font-size:1.1rem"></h3>
-      <div id="optionsContainer"></div>
-      <textarea id="textAnswer" class="hidden" rows="3" placeholder="ഉത്തരം ഇവിടെ എഴുതുക..."></textarea>
-      <button type="button" id="submitAnsBtn" class="hidden" onclick="submitAnswer()">ഉത്തരം സമർപ്പിക്കുക</button>
+    <!-- BATSMAN PANEL -->
+    <div id="questionCard" class="card hidden">
+      <h3 style="color:#22c55e;margin-bottom:0.5rem">ബാറ്റിംഗ് പാനൽ</h3>
+      <div id="question" style="font-size:1.05rem;margin-bottom:1rem"></div>
+      <div id="options"></div>
     </div>
 
-    <div id="spectatorMsg" class="hidden" style="text-align:center;padding:1rem;color:#94a3b8">
-      <h3>ലിവ് വ്യൂവേഴ്‌സ് മോഡ് (Spectator)</h3>
-      <p>കളിക്കാർ മത്സരിക്കുന്നത് തത്സമയം കാണുക...</p>
+    <!-- SPECTATOR & LIVE VIEW -->
+    <div id="spectatorView" class="card hidden">
+      <h3>ലൈവ് വ്യൂ (Spectator)</h3>
+      <p id="specInfo" style="margin-top:0.5rem">കളി പുരോഗമിക്കുന്നു...</p>
     </div>
 
-    <button type="button" class="secondary" style="background:#ef4444;color:white;margin-top:1.5rem" onclick="quitGame()">പുറത്തേക്ക് പോവുക (Quit)</button>
+    <div id="playerStats" class="stats hidden"></div>
+    <div id="result" class="card hidden" style="text-align:center"></div>
+  </div>
+
+  <!-- SUMMARY SCREEN -->
+  <div id="summary" class="card hidden">
+    <h2 style="text-align:center;color:#22c55e;margin-bottom:1rem">മാച്ച് സമ്മറി & റിസൾട്ട്</h2>
+    <div id="summaryContent"></div>
+    <button onclick="location.reload()" style="margin-top:1rem">പുതിയ ഗെയിം തുടങ്ങുക</button>
   </div>
 </div>
 
 <script>
+// Firebase Config
 const firebaseConfig = {
   apiKey: "AIzaSyBKQQRIcz1eEsz-V0r8WYsOCXBjAsR6XNQ",
   authDomain: "zaman-6587f.firebaseapp.com",
@@ -127,309 +137,495 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-const questionSets = [
-  [
-    {q:"ഇലക്ട്രോണുകൾ ചലിക്കാൻ നൽകുന്ന ശക്തിയെ എന്ത് പറയുന്നു?",o:["Current","Voltage (EMF)","Resistance","Power"],a:1,type:"mcq",time:10},
-    {q:"Voltage-ന്റെ മറ്റൊരു പേര് എന്താണ്?",o:["Current","Electro Motive Force","Resistance","Power"],a:1,type:"mcq",time:10},
-    {q:"Conductor-ന്റെ ഉദാഹരണം എഴുതുക (ഒറ്റ വാക്ക്)",o:[],type:"word",time:60},
-    {q:"Resistor-ന്റെ പ്രവർത്തനം ചുരുക്കി എഴുതുക (3 വാചകം)",o:[],type:"sentence",time:300},
-    {q:"Mobile Phone PCB-യുടെ പ്രധാന ഘടന വിവരിക്കുക (5 വാചകം)",o:[],type:"para",time:600}
-  ],
-  [{q:"Capacitor-ന്റെ യൂണിറ്റ് എന്താണ്?",o:["Ohm","Farad","Henry","Ampere"],a:1,type:"mcq",time:10}],
-  [{q:"Ohm's Law ഫോർമുല എന്താണ്?",o:["V=IR","P=VI","E=MC²","F=MA"],a:0,type:"mcq",time:10}],
-  [{q:"PCB യുടെ പൂർണ്ണരൂപം എഴുതുക",o:["Printed Circuit Board"],a:0,type:"mcq",time:10}],
-  [{q:"Multimeter എന്ത് അളക്കുന്നു?",o:["Voltage, Current, Resistance"],a:1,type:"mcq",time:10}]
-];
+let roomId = null, playerId = null, playerName = "", teamName = "", isHost = false, gameRef = null;
+let timerInterval = null, startTime = 0, myRole = "spectator";
+let currentQuestionsList = [];
+let isSolo = false, soloData = null;
 
-let roomId = null, playerId = null, playerName = "", roomRef = null;
-let myRole = ""; 
-let timerInterval = null, startTime = 0;
+function generateCode(){return Math.random().toString(36).substring(2,8).toUpperCase();}
 
-function createRoom() {
-  playerName = document.getElementById('playerName').value.trim();
-  if(!playerName) return alert("ദയവായി നിങ്ങളുടെ പേര് നൽകുക");
+function speakText(text){
+  if('speechSynthesis' in window){
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'ml-IN';
+    speechSynthesis.speak(u);
+  }
+}
+
+// Scoring calculation based on 10 seconds timing for Optional Questions
+function calcRuns(timeTaken){
+  if(timeTaken <= 2) return 6;
+  if(timeTaken <= 4) return 4;
+  if(timeTaken <= 6) return 3;
+  if(timeTaken <= 8) return 2;
+  if(timeTaken <= 10) return 1;
+  return 0; // Out if > 10.01s
+}
+
+// --- MULTIPLAYER ROOM SETUP ---
+function createRoom(){
+  playerName = document.getElementById('playerName').value.trim() || "Player";
+  teamName = document.getElementById('teamName').value.trim() || "Team A";
+  roomId = generateCode();
+  localStorage.setItem('quizRoom', roomId);
+  localStorage.setItem('quizName', playerName);
+  playerId = "p" + Date.now();
+  isHost = true;
+  gameRef = db.ref("rooms/" + roomId);
   
-  roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-  playerId = "p_" + Date.now();
-  myRole = "host";
-
-  localStorage.setItem('zaman_mp_room', roomId);
-  localStorage.setItem('zaman_mp_player', playerId);
-
-  roomRef = db.ref("rooms/" + roomId);
-  roomRef.set({
+  gameRef.set({
     host: playerId,
+    players: {[playerId]: {name: playerName, team: teamName, role: "host", runs: 0, balls: 0}},
     status: "lobby",
-    players: {
-      [playerId]: { name: playerName, role: "host" }
-    }
+    score: 0, wickets: 0, extras: 0, ball: 0, over: 0, innings: 1,
+    currentQ: null, used: [], phase: "select", lastBalls: [], target: null,
+    selectedSet: "OPTIONAL QUESTIONS 1"
   });
-
-  setupRoomListeners();
+  enterLobby();
 }
 
-function joinRoom() {
-  playerName = document.getElementById('playerName').value.trim();
-  roomId = document.getElementById('roomCodeInput').value.trim().toUpperCase();
-  if(!playerName || !roomId) return alert("പേരും റൂം കോഡും നൽകുക");
-
-  playerId = "p_" + Date.now();
+function joinRoom(){
+  playerName = document.getElementById('playerName').value.trim() || "Player";
+  teamName = document.getElementById('teamName').value.trim() || "Team B";
+  roomId = document.getElementById('roomCode').value.trim().toUpperCase();
+  if(!roomId) return alert("റൂം കോഡ് നൽകുക");
   
-  localStorage.setItem('zaman_mp_room', roomId);
-  localStorage.setItem('zaman_mp_player', playerId);
-
-  roomRef = db.ref("rooms/" + roomId);
-  roomRef.once("value", snap => {
-    if(!snap.exists()) return alert("ഇത്തരത്തിലുള്ള റൂം നിലവിലില്ല!");
-    const data = snap.val();
-    const playerCount = Object.keys(data.players || {}).length;
-    
-    myRole = (playerCount >= 2) ? "spectator" : "guest";
-
-    roomRef.child("players/" + playerId).set({ name: playerName, role: myRole });
-    setupRoomListeners();
-  });
-}
-
-function setupRoomListeners() {
-  document.getElementById('homeScreen').classList.add('hidden');
-  document.getElementById('lobbyScreen').classList.remove('hidden');
-  document.getElementById('displayRoom').textContent = roomId;
-
-  roomRef.on("value", snap => {
-    const data = snap.val();
-    if(!data) return;
-
-    let listHtml = "<b>റൂമിലുള്ളവർ:</b><br>";
-    Object.values(data.players || {}).forEach(p => {
-      listHtml += `• ${p.name} (${p.role})<br>`;
-    });
-    document.getElementById('playerList').innerHTML = listHtml;
-
-    if(data.host === playerId && data.status === "lobby") {
-      document.getElementById('hostControls').classList.remove('hidden');
-      document.getElementById('waitingMsg').classList.add('hidden');
-    }
-
-    if(data.status === "toss") {
-      startTossPhase(data);
-    } else if(data.status === "set_selection") {
-      startSetSelectionPhase(data);
-    } else if(data.status === "playing") {
-      startLiveGame(data);
-    }
-  });
-}
-
-function startMatchSetup() {
-  roomRef.update({ status: "toss" });
-}
-
-function startTossPhase(data) {
-  document.getElementById('lobbyScreen').classList.add('hidden');
-  document.getElementById('setScreen').classList.add('hidden');
-  document.getElementById('tossScreen').classList.remove('hidden');
-
-  if(data.host === playerId) {
-    document.getElementById('tossMsg').textContent = "നിങ്ങൾ ടോസ് ചെയ്യുന്നു. ഹെഡ്സ് അല്ലെങ്കിൽ ടെയിൽസ് തിരഞ്ഞെടുക്കുക:";
-    document.getElementById('tossButtons').classList.remove('hidden');
-  } else {
-    document.getElementById('tossMsg').textContent = "ഹോസ്റ്റ് ടോസ് ചെയ്യുകയാണ്, കാത്തിരിക്കൂ...";
-  }
-}
-
-// Fixed performToss function
-function performToss(choice) {
-  const outcomes = ["Heads", "Tails"];
-  const result = outcomes[Math.floor(Math.random() * outcomes.length)];
-  const tossWon = (choice === result);
+  localStorage.setItem('quizRoom', roomId);
+  localStorage.setItem('quizName', playerName);
+  playerId = "p" + Date.now();
+  gameRef = db.ref("rooms/" + roomId);
   
-  roomRef.once("value", snap => {
-    const data = snap.val();
-    const playersObj = data.players || {};
-    const playerIds = Object.keys(playersObj);
-    
-    const otherPlayerId = playerIds.find(id => id !== playerId) || playerId;
-    const winnerId = tossWon ? playerId : otherPlayerId;
+  gameRef.once("value", snap => {
+    if(!snap.exists()) return alert("റൂം കണ്ടെത്തിയില്ല");
+    gameRef.child("players/" + playerId).set({name: playerName, team: teamName, role: "spectator", runs: 0, balls: 0});
+    enterLobby();
+  });
+}
 
-    roomRef.update({
-      status: "set_selection",
-      tossWinner: winnerId,
-      tossResult: result
+function rejoinRoom(){
+  const savedRoom = localStorage.getItem('quizRoom');
+  const savedName = localStorage.getItem('quizName');
+  if(!savedRoom) return alert("മുമ്പ് ജോയിൻ ചെയ്ത റൂം ഇല്ല");
+  playerName = savedName || "Player";
+  roomId = savedRoom;
+  gameRef = db.ref("rooms/" + roomId);
+  
+  gameRef.once("value", snap => {
+    if(!snap.exists()) return alert("റൂം കണ്ടെത്തിയില്ല");
+    const d = snap.val();
+    let existingId = null;
+    Object.entries(d.players || {}).forEach(([id, p]) => {
+      if(p.name === playerName) existingId = id;
     });
-  });
-}
-
-function startSetSelectionPhase(data) {
-  document.getElementById('tossScreen').classList.add('hidden');
-  document.getElementById('setScreen').classList.remove('hidden');
-
-  const isWinner = data.tossWinner === playerId;
-  if(isWinner) {
-    document.getElementById('setChooserMsg').textContent = "അഭിനന്ദനങ്ങൾ! നിങ്ങൾ ടോസ് വിജയിച്ചു. സെറ്റ് തിരഞ്ഞെടുക്കുക:";
-    document.getElementById('lockSetBtn').classList.remove('hidden');
-    document.getElementById('waitSetMsg').classList.add('hidden');
-  } else {
-    document.getElementById('setChooserMsg').textContent = "എതിരാളി ടോസ് ജയിച്ചു, സെറ്റ് തിരഞ്ഞെടുക്കുന്നു...";
-  }
-}
-
-function lockSet() {
-  const selectedSetIdx = parseInt(document.getElementById('setSelect').value);
-  roomRef.update({
-    status: "playing",
-    selectedSet: selectedSetIdx,
-    innings: 1,
-    scoreA: 0, wicketsA: 0,
-    scoreB: 0, wicketsB: 0,
-    over: 0, ball: 0,
-    currentQuestion: null
-  });
-}
-
-function startLiveGame(data) {
-  document.getElementById('setScreen').classList.add('hidden');
-  document.getElementById('tossScreen').classList.add('hidden');
-  document.getElementById('lobbyScreen').classList.add('hidden');
-  document.getElementById('gameScreen').classList.remove('hidden');
-
-  document.getElementById('score').textContent = data.innings === 1 ? data.scoreA : data.scoreB;
-  document.getElementById('wickets').textContent = data.innings === 1 ? data.wicketsA : data.wicketsB;
-  document.getElementById('over').textContent = data.over + "." + data.ball;
-  document.getElementById('inningsTitle').textContent = data.innings === 1 ? "ടീം A ബാറ്റിംഗ്" : "ടീം B ബാറ്റിംഗ്";
-
-  const isHost = data.host === playerId;
-  let isMyTurnToBat = (data.innings === 1 && !isHost) || (data.innings === 2 && isHost);
-
-  if(myRole === "spectator") {
-    document.getElementById('spectatorMsg').classList.remove('hidden');
-    return;
-  }
-
-  if(isMyTurnToBat) {
-    document.getElementById('bowlerPanel').classList.add('hidden');
-    document.getElementById('actionPanel').classList.remove('hidden');
-    if(data.currentQuestion !== null && data.currentQuestion !== undefined) {
-      renderActiveQuestion(data.currentQuestion, data.selectedSet);
+    if(existingId){
+      playerId = existingId;
     } else {
-      document.getElementById('questionText').textContent = "ബൗളർ ചോദ്യം നൽകുന്നത് വരെ കാത്തിരിക്കുക...";
-      document.getElementById('optionsContainer').innerHTML = "";
+      playerId = "p" + Date.now();
+      gameRef.child("players/" + playerId).set({name: playerName, team: teamName || "Team", role: "spectator", runs: 0, balls: 0});
     }
-  } else {
-    document.getElementById('bowlerPanel').classList.remove('hidden');
-    document.getElementById('actionPanel').classList.add('hidden');
-    populateBowlerDropdown(data.selectedSet);
-  }
-}
-
-function populateBowlerDropdown(setIdx) {
-  const sel = document.getElementById('questionSelect');
-  sel.innerHTML = "";
-  const questions = questionSets[setIdx] || questionSets[0];
-  questions.forEach((q, idx) => {
-    const opt = document.createElement('option');
-    opt.value = idx;
-    opt.textContent = `[${q.type.toUpperCase()}] ${q.q}`;
-    sel.appendChild(opt);
+    enterLobby();
   });
 }
 
-function sendQuestion() {
-  const qIdx = parseInt(document.getElementById('questionSelect').value);
-  roomRef.child("currentQuestion").set(qIdx);
+// --- SOLO MODE SETUP ---
+function startSoloGame(){
+  isSolo = true;
+  playerName = document.getElementById('playerName').value.trim() || "Solo Player";
+  teamName = document.getElementById('teamName').value.trim() || "Solo Team";
+  
+  soloData = {
+    players: {[playerName]: {name: playerName, team: teamName, role: "striker", runs: 0, balls: 0}},
+    status: "playing",
+    score: 0, wickets: 0, extras: 0, ball: 0, over: 0, innings: 1,
+    currentQ: null, used: [], phase: "bowl", lastBalls: [], target: null,
+    selectedSet: "OPTIONAL QUESTIONS 1",
+    striker: playerName, bowler: "Auto Bowler"
+  };
+  currentQuestionsList = questionSets[soloData.selectedSet];
+  
+  document.getElementById('home').classList.add('hidden');
+  document.getElementById('game').classList.remove('hidden');
+  loadSoloQuestion();
 }
 
-function renderActiveQuestion(qIdx, setIdx) {
-  const q = questionSets[setIdx][qIdx];
-  if(!q) return;
-  document.getElementById('questionText').textContent = q.q;
-  const optCont = document.getElementById('optionsContainer');
-  optCont.innerHTML = "";
-
-  const ta = document.getElementById('textAnswer');
-  const sb = document.getElementById('submitAnsBtn');
-
-  if(q.type === "mcq") {
-    ta.classList.add('hidden');
-    sb.classList.add('hidden');
-    q.o.forEach((optText, i) => {
-      const btn = document.createElement('div');
-      btn.className = 'option';
-      btn.textContent = optText;
-      btn.onclick = () => submitAnswer();
-      optCont.appendChild(btn);
-    });
-  } else {
-    ta.classList.remove('hidden');
-    sb.classList.remove('hidden');
+function enterLobby(){
+  document.getElementById('home').classList.add('hidden');
+  document.getElementById('lobby').classList.remove('hidden');
+  document.getElementById('displayRoom').textContent = roomId;
+  if(isHost){
+    document.getElementById('hostControls').classList.remove('hidden');
+    document.getElementById('waitingMsg').classList.add('hidden');
   }
+  gameRef.off();
+  gameRef.on("value", snap => {
+    const d = snap.val(); if(!d) return;
+    currentQuestionsList = questionSets[d.selectedSet || "OPTIONAL QUESTIONS 1"] || questionSets["OPTIONAL QUESTIONS 1"];
+    renderPlayers(d);
+    if(d.status === "playing") showGame(d);
+    if(d.status === "finished") showSummary(d);
+  });
+}
 
-  startTime = Date.now();
-  let timeLeft = q.time;
-  document.getElementById('timer').textContent = timeLeft;
+function renderPlayers(d){
+  const list = document.getElementById('playerList');
+  if(!list) return;
+  list.innerHTML = `<b>പ്ലേയേഴ്സ് (${Object.keys(d.players || {}).length}):</b><br>`;
+  Object.entries(d.players || {}).forEach(([id, p]) => {
+    list.innerHTML += `<div>• ${p.name} (${p.team || 'Team'}) <span class="role">${p.role || "spectator"}</span></div>`;
+    if(id === playerId) myRole = p.role || "spectator";
+  });
+}
 
+function startMatch(){
+  const bc = parseInt(document.getElementById('battingCount').value) || 2;
+  const bow = parseInt(document.getElementById('bowlingCount').value) || 1;
+  const chosenSet = document.getElementById('setSelect').value;
+  
+  gameRef.once("value", snap => {
+    const d = snap.val();
+    const pids = Object.keys(d.players || {});
+    if(pids.length < bc + bow) return alert("മതിയായ പ്ലേയേഴ്സ് ഇല്ല (Batting + Bowling count കൂടുതലാണ്)");
+    
+    const batting = pids.slice(0, bc);
+    const bowling = pids.slice(bc, bc + bow);
+    
+    const updates = {
+      status: "playing", score: 0, wickets: 0, extras: 0, ball: 0, over: 0, innings: 1,
+      used: [], phase: "select", battingCount: bc, bowlingCount: bow,
+      battingOrder: batting, bowlingOrder: bowling, currentBowlerIndex: 0,
+      lastBalls: [], target: null, selectedSet: chosenSet
+    };
+    batting.forEach((id, i) => updates[`players/${id}/role`] = i === 0 ? "striker" : (i === 1 ? "nonstriker" : "batsman"));
+    bowling.forEach((id, i) => updates[`players/${id}/role`] = i === 0 ? "bowler" : "bowling");
+    updates.striker = batting[0];
+    updates.nonstriker = batting[1] || null;
+    updates.bowler = bowling[0];
+    gameRef.update(updates);
+  });
+}
+
+function showGame(d){
+  if(isSolo) return;
+  document.getElementById('lobby').classList.add('hidden');
+  document.getElementById('game').classList.remove('hidden');
+  updateScore(d);
+  
+  document.getElementById('bowlerPanel').classList.toggle('hidden', myRole !== "bowler");
+  document.getElementById('questionCard').classList.toggle('hidden', !(myRole === "striker" || myRole === "batsman") || d.phase !== "bowl");
+  document.getElementById('spectatorView').classList.toggle('hidden', myRole === "bowler" || myRole === "striker" || myRole === "batsman");
+  
+  if(myRole === "bowler" && d.phase === "select") populateQSelect(d);
+  if(d.phase === "bowl" && (myRole === "striker" || myRole === "batsman")) loadBatsmanQuestion(d);
+  if(myRole !== "striker" && myRole !== "batsman" && myRole !== "bowler" && d.currentQ !== null) showSpectator(d);
+  showPlayerStats(d);
+}
+
+function updateScore(d){
+  const total = (d.score || 0) + (d.extras || 0);
+  document.getElementById('score').textContent = total;
+  document.getElementById('wickets').textContent = d.wickets || 0;
+  document.getElementById('extras').textContent = d.extras || 0;
+  document.getElementById('over').textContent = (d.over || 0) + "." + (d.ball || 0);
+  
+  const balls = (d.over || 0) * 6 + (d.ball || 0);
+  const rr = balls > 0 ? (total / (balls / 6)).toFixed(2) : "0.00";
+  document.getElementById('rr').textContent = rr;
+  
+  if(d.target){
+    document.getElementById('targetInfo').textContent = `ഇന്നിംഗ്സ് ${d.innings} | വിജയലക്ഷ്യം (Target): ${d.target}`;
+  } else {
+    document.getElementById('targetInfo').textContent = `ഇന്നിംഗ്സ് ${d.innings}`;
+  }
+  
+  document.getElementById('striker').textContent = d.players?.[d.striker]?.name || "-";
+  document.getElementById('bowler').textContent = d.players?.[d.bowler]?.name || "-";
+  document.getElementById('lastBalls').textContent = "അവസാന പന്തുകൾ: " + (d.lastBalls || []).slice(-5).join(" ");
+}
+
+function showPlayerStats(d){
+  const div = document.getElementById('playerStats');
+  div.classList.remove('hidden');
+  let html = "<b>പ്ലേയർ ബാറ്റിംഗ് സ്റ്റാറ്റ്സ്:</b><br>";
+  Object.entries(d.players || {}).forEach(([id, p]) => {
+    if(p.runs || p.balls) html += `${p.name}: ${p.runs || 0} റൺസ് (${p.balls || 0} ബോൾ)<br>`;
+  });
+  div.innerHTML = html;
+}
+
+function populateQSelect(d){
+  const sel = document.getElementById('qSelect');
+  sel.innerHTML = "";
+  currentQuestionsList.forEach((q, i) => {
+    if(!(d.used || []).includes(i)){
+      const opt = document.createElement('option');
+      opt.value = i; opt.textContent = (i + 1) + ". " + q.q;
+      sel.appendChild(opt);
+    }
+  });
+  if(sel.options.length === 0) sel.innerHTML = "<option>ചോദ്യങ്ങൾ തീർന്നു</option>";
+}
+
+function changeBowler(){
+  gameRef.once("value", snap => {
+    const d = snap.val();
+    const order = d.bowlingOrder || [];
+    if(order.length < 2) return alert("മറ്റ് ബൗളർമാർ उपलब्धമില്ല");
+    let idx = (d.currentBowlerIndex || 0) + 1;
+    if(idx >= order.length) idx = 0;
+    const nb = order[idx];
+    gameRef.update({bowler: nb, currentBowlerIndex: idx, phase: "select", currentQ: null});
+    gameRef.child("players/" + d.bowler + "/role").set("bowling");
+    gameRef.child("players/" + nb + "/role").set("bowler");
+  });
+}
+
+function bowlerSelectQuestion(){
+  const idx = parseInt(document.getElementById('qSelect').value);
+  if(isNaN(idx)) return alert("ചോദ്യം തിരഞ്ഞെടുക്കുക");
+  const q = currentQuestionsList[idx];
+  speakText(q.q); // Text-to-speech for bowler
+  
+  gameRef.once("value", snap => {
+    const d = snap.val();
+    gameRef.update({currentQ: idx, phase: "bowlerAnswer"});
+  });
+  
+  document.getElementById('bowlerAnswerArea').classList.remove('hidden');
+  document.getElementById('bowlerQText').textContent = q.q;
+  const opts = document.getElementById('bowlerOptions');
+  opts.innerHTML = "";
+  q.o.forEach((o, i) => {
+    const div = document.createElement('div');
+    div.className = 'option'; div.textContent = o; div.dataset.i = i;
+    div.onclick = () => { opts.querySelectorAll('.option').forEach(x => x.classList.remove('selected')); div.classList.add('selected'); };
+    opts.appendChild(div);
+  });
+}
+
+function bowlerSubmitAnswer(){
+  const sel = document.querySelector('#bowlerOptions .option.selected');
+  if(!sel) return alert("ഉത്തരം തിരഞ്ഞെടുക്കുക");
+  const chosenIndex = parseInt(sel.dataset.i);
+  
+  gameRef.once("value", snap => {
+    const d = snap.val();
+    const q = currentQuestionsList[d.currentQ];
+    
+    if(chosenIndex === q.a){
+      // Correct answer by bowler -> Sent to batsman
+      gameRef.update({phase: "bowl"});
+      document.getElementById('bowlerAnswerArea').classList.add('hidden');
+      alert("ഉത്തരം ശരിയാണ്! ബാറ്റ്സ്മാന് ചോദ്യം കൈമാറി.");
+    } else {
+      // Wrong answer by bowler -> Extra run
+      gameRef.update({extras: (d.extras || 0) + 1, phase: "select", currentQ: null});
+      document.getElementById('bowlerAnswerArea').classList.add('hidden');
+      alert("ബൗളറുടെ ഉത്തരം തെറ്റി! 1 എക്സ്ട്രാ റൺ നൽകി.");
+    }
+  });
+}
+
+function loadBatsmanQuestion(d){
+  if(d.currentQ === null || d.phase !== "bowl") return;
+  const q = currentQuestionsList[d.currentQ];
+  document.getElementById('question').textContent = q.q;
+  const opts = document.getElementById('options');
+  opts.innerHTML = "";
+  
+  q.o.forEach((o, i) => {
+    const div = document.createElement('div');
+    div.className = 'option'; div.textContent = o;
+    div.onclick = () => batsmanAnswer(i, d.currentQ);
+    opts.appendChild(div);
+  });
+  document.getElementById('questionCard').classList.remove('hidden');
+  startTimer(10); // 10 seconds for Optional Questions
+}
+
+function showSpectator(d){
+  if(d.currentQ === null) return;
+  const q = currentQuestionsList[d.currentQ];
+  document.getElementById('specInfo').innerHTML = `<b>ചോദ്യം:</b> ${q.q}<br><span style="color:#facc15">ബാറ്റ്സ്മാൻ ഉത്തരം നൽകിക്കൊണ്ടിരിക്കുന്നു...</span>`;
+  document.getElementById('spectatorView').classList.remove('hidden');
+}
+
+function startTimer(sec){
   clearInterval(timerInterval);
+  let t = sec;
+  document.getElementById('timer').textContent = t;
+  startTime = Date.now();
   timerInterval = setInterval(() => {
-    timeLeft--;
-    document.getElementById('timer').textContent = timeLeft;
-    if(timeLeft <= 0) {
+    t--;
+    document.getElementById('timer').textContent = Math.max(0, t);
+    if(t <= 0){
       clearInterval(timerInterval);
-      submitAnswer();
+      // Timeout -> Out
+      if(!isSolo) processAnswer(99, null, sec + 1, null);
     }
   }, 1000);
 }
 
-function submitAnswer() {
+function batsmanAnswer(choice, qIdx){
   clearInterval(timerInterval);
   const timeTaken = (Date.now() - startTime) / 1000;
-  
-  let runs = 0, wicket = false;
-  if(timeTaken > 10.01) {
-    wicket = true;
+  if(isSolo){
+    processSoloAnswer(choice, qIdx, timeTaken);
   } else {
-    if(timeTaken <= 2) runs = 6;
-    else if(timeTaken <= 4) runs = 4;
-    else if(timeTaken <= 6) runs = 3;
-    else if(timeTaken <= 8) runs = 2;
-    else if(timeTaken <= 10) runs = 1;
-    else wicket = true;
+    processAnswer(choice, qIdx, timeTaken, null);
   }
+}
 
-  roomRef.once("value", snap => {
+function processAnswer(choice, qIdx, timeTaken, text){
+  gameRef.once("value", snap => {
     const d = snap.val();
-    let scoreA = d.scoreA || 0, wicketsA = d.wicketsA || 0;
-    let scoreB = d.scoreB || 0, wicketsB = d.wicketsB || 0;
-    let over = d.over || 0, ball = d.ball || 0, innings = d.innings || 1;
-
-    if(innings === 1) {
-      scoreA += runs;
-      if(wicket) wicketsA++;
+    const q = currentQuestionsList[qIdx];
+    let runs = 0, wicket = false;
+    
+    if(timeTaken > 10 || choice !== q.a){
+      wicket = true; // Out if > 10s or wrong answer
     } else {
-      scoreB += runs;
-      if(wicket) wicketsB++;
+      runs = calcRuns(timeTaken);
+      if(runs === 0) wicket = true;
     }
-
-    ball++;
-    if(ball >= 6) {
-      ball = 0;
-      over++;
+    
+    const newScore = (d.score || 0) + runs;
+    const newWickets = (d.wickets || 0) + (wicket ? 1 : 0);
+    let newBall = (d.ball || 0) + 1, newOver = d.over || 0;
+    let rotate = false;
+    
+    if(runs === 1 || runs === 3) rotate = true;
+    if(newBall >= 6){ newBall = 0; newOver++; rotate = true; }
+    
+    const used = [...(d.used || []), qIdx];
+    const lastBalls = [...(d.lastBalls || []), wicket ? "W" : runs];
+    
+    let updates = {
+      score: newScore, wickets: newWickets, ball: newBall, over: newOver,
+      used: used, phase: "select", currentQ: null, lastBalls: lastBalls
+    };
+    
+    if(d.striker){
+      updates[`players/${d.striker}/runs`] = (d.players?.[d.striker]?.runs || 0) + runs;
+      updates[`players/${d.striker}/balls`] = (d.players?.[d.striker]?.balls || 0) + 1;
     }
-
-    if(innings === 1 && (over >= 5 || wicketsA >= 2)) {
-      innings = 2;
-      over = 0;
-      ball = 0;
+    if(wicket) updates[`players/${d.striker}/role`] = "out";
+    
+    if(rotate && d.nonstriker && !wicket){
+      updates.striker = d.nonstriker;
+      updates.nonstriker = d.striker;
+      updates[`players/${d.striker}/role`] = "nonstriker";
+      updates[`players/${d.nonstriker}/role`] = "striker";
     }
-
-    roomRef.update({
-      scoreA, wicketsA, scoreB, wicketsB, over, ball, innings,
-      currentQuestion: null
-    });
+    
+    const maxW = (d.battingCount || 2);
+    
+    // Check Innings & Target
+    if(newWickets >= maxW || newOver >= 5){ // 5 Overs per set
+      if(d.innings === 1){
+        updates.innings = 2;
+        updates.score = 0; updates.wickets = 0; updates.ball = 0; updates.over = 0;
+        updates.target = newScore + (d.extras || 0) + 1;
+        updates.status = "playing";
+        // Swap Batting and Bowling teams for 2nd innings
+        const tempB = d.battingOrder;
+        updates.battingOrder = d.bowlingOrder;
+        updates.bowlingOrder = tempB;
+        updates.striker = updates.battingOrder[0];
+        updates.nonstriker = updates.battingOrder[1] || null;
+        updates.bowler = updates.bowlingOrder[0];
+      } else {
+        updates.status = "finished";
+      }
+    }
+    
+    if(d.innings === 2 && d.target && newScore + (d.extras || 0) >= d.target){
+      updates.status = "finished";
+    }
+    
+    gameRef.update(updates);
+    showResultPopup(runs, wicket, timeTaken);
   });
 }
-</script>
 
-<!-- Rejoin JavaScript File Link -->
-<script src="rejoin.js"></script>
+// --- SOLO MODE LOGIC ---
+function loadSoloQuestion(){
+  const qIdx = Math.floor(Math.random() * currentQuestionsList.length);
+  soloData.currentQ = qIdx;
+  const q = currentQuestionsList[qIdx];
+  
+  document.getElementById('score').textContent = soloData.score + soloData.extras;
+  document.getElementById('wickets').textContent = soloData.wickets;
+  document.getElementById('over').textContent = soloData.over + "." + soloData.ball;
+  document.getElementById('striker').textContent = playerName;
+  document.getElementById('bowler').textContent = "Auto Bowler";
+  
+  document.getElementById('question').textContent = q.q;
+  const opts = document.getElementById('options');
+  opts.innerHTML = "";
+  q.o.forEach((o, i) => {
+    const div = document.createElement('div');
+    div.className = 'option'; div.textContent = o;
+    div.onclick = () => batsmanAnswer(i, qIdx);
+    opts.appendChild(div);
+  });
+  document.getElementById('questionCard').classList.remove('hidden');
+  startTimer(10);
+}
+
+function processSoloAnswer(choice, qIdx, timeTaken){
+  const q = currentQuestionsList[qIdx];
+  let runs = 0, wicket = false;
+  
+  if(timeTaken > 10 || choice !== q.a){
+    wicket = true;
+  } else {
+    runs = calcRuns(timeTaken);
+    if(runs === 0) wicket = true;
+  }
+  
+  soloData.score += runs;
+  if(wicket) soloData.wickets++;
+  soloData.ball++;
+  if(soloData.ball >= 6){ soloData.ball = 0; soloData.over++; }
+  
+  soloData.lastBalls.push(wicket ? "W" : runs);
+  document.getElementById('lastBalls').textContent = "അവസാന പന്തുകൾ: " + soloData.lastBalls.slice(-5).join(" ");
+  
+  showResultPopup(runs, wicket, timeTaken);
+  
+  if(soloData.wickets >= 2 || soloData.over >= 5){
+    showSoloSummary();
+  } else {
+    setTimeout(loadSoloQuestion, 2000);
+  }
+}
+
+function showResultPopup(runs, wicket, time){
+  const res = document.getElementById('result');
+  res.classList.remove('hidden');
+  res.innerHTML = wicket ? `<h2 style='color:#ef4444'>വിക്കറ്റ് / ഔട്ട്!</h2><p>എടുത്ത സമയം: ${time.toFixed(1)}s</p>` : `<h2 style='color:#22c55e'>${runs} റൺസ്!</h2><p>എടുത്ത സമയം: ${time.toFixed(1)}s</p>`;
+  setTimeout(() => res.classList.add('hidden'), 2000);
+}
+
+function showSummary(d){
+  document.getElementById('game').classList.add('hidden');
+  document.getElementById('summary').classList.remove('hidden');
+  const total = (d.score || 0) + (d.extras || 0);
+  let html = `<p>മത്സരം അവസാനിച്ചു!</p><p>ഫൈനൽ സ്കോർ: <b>${total}/${d.wickets}</b></p>`;
+  
+  let motm = "", maxR = 0;
+  Object.entries(d.players || {}).forEach(([id, p]) => {
+    if((p.runs || 0) > maxR){ maxR = p.runs; motm = p.name; }
+  });
+  html += `<p>മാൻ ഓഫ് ദ മാച്ച്: <b>${motm}</b> (${maxR} റൺസ്)</p>`;
+  document.getElementById('summaryContent').innerHTML = html;
+}
+
+function showSoloSummary(){
+  document.getElementById('game').classList.add('hidden');
+  document.getElementById('summary').classList.remove('hidden');
+  document.getElementById('summaryContent').innerHTML = `<p>സോളോ ഗെയിം പൂർത്തിയായി!</p><p>ആകെ സ്കോർ: <b>${soloData.score}/${soloData.wickets}</b></p>`;
+}
+</script>
 </body>
 </html>
