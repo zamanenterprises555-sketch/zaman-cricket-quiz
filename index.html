@@ -3,7 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Zaman Cricket Quiz</title>
+<title>Zaman Cricket Quiz - Ultimate Edition</title>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;padding:1rem}
@@ -13,50 +15,98 @@ h1{color:#22c55e;font-size:1.4rem}
 .card{background:#1e293b;border-radius:16px;padding:1.2rem;margin:0.8rem 0}
 button{background:#22c55e;color:#0f172a;border:none;padding:0.8rem;border-radius:10px;font-weight:700;width:100%;margin:0.5rem 0;font-size:1rem;cursor:pointer}
 button.solo{background:#f59e0b;color:#0f172a}
-button.rejoin{background:#3b82f6;color:white}
+button.secondary{background:#334155;color:#e2e8f0}
 input,select{width:100%;padding:0.8rem;border-radius:10px;border:none;margin:0.5rem 0;font-size:1rem;background:#334155;color:white}
-.option{background:#334155;padding:0.8rem;margin:0.4rem 0;border-radius:10px;cursor:pointer}
+.option{background:#334155;padding:0.8rem;margin:0.4rem 0;border-radius:10px;cursor:pointer;border:2px solid transparent}
+.option.selected{background:#475569;border-color:#22c55e}
 .hidden{display:none}
-.scoreboard{display:flex;justify-content:space-between;font-size:1rem;margin-bottom:0.5rem}
+.scoreboard{display:flex;justify-content:space-between;font-size:0.9rem;margin-bottom:0.5rem;flex-wrap:wrap;gap:0.3rem}
 .timer{font-size:2rem;text-align:center;color:#facc15;font-weight:700}
+.small{font-size:0.8rem;color:#94a3b8}
 </style>
 </head>
 <body>
 <div class="container">
   <header>
     <h1>🏏 ZAMAN CRICKET QUIZ</h1>
-    <p style="font-size:0.8rem;color:#94a3b8">Solo Edition with Rejoin</p>
+    <p class="small">Solo (Team A vs Team B) & Multiplayer</p>
   </header>
 
+  <!-- HOME SCREEN -->
   <div id="home" class="card">
-    <h2 style="text-align:center;margin-bottom:1rem">കളി തുടങ്ങാൻ പേര് നൽകുക</h2>
-    <input id="playerName" placeholder="നിങ്ങളുടെ പേര്" value="Player">
-    <button type="button" class="solo" onclick="startSoloGame(false)">⚡ പുതിയ സോളോ ഗെയിം</button>
-    <button type="button" id="rejoinBtn" class="rejoin hidden" onclick="startSoloGame(true)">🔄 കഴിഞ്ഞ കളി തുടരുക (Rejoin)</button>
+    <h2 style="text-align:center;margin-bottom:1rem">മോഡ് തിരഞ്ഞെടുക്കുക</h2>
+    <input id="playerName" placeholder="നിങ്ങളുടെ പേര്" value="Player" maxlength="20">
+    
+    <button type="button" class="solo" onclick="startSoloMode()">⚡ സോളോ മോഡ് (Team A vs Team B)</button>
+    <button type="button" class="secondary" onclick="createMultiplayerRoom()">🌐 മൾട്ടിപ്ലെയർ റൂം സൃഷ്ടിക്കുക</button>
+    
+    <div style="margin:0.8rem 0;border-top:1px solid #334155;padding-top:0.8rem;">
+      <input id="roomCode" placeholder="റൂം കോഡ് നൽകുക" maxlength="6" style="text-transform:uppercase">
+      <button type="button" class="secondary" onclick="joinMultiplayerRoom()">റൂമിൽ ജോയിൻ ചെയ്യുക</button>
+    </div>
+
+    <button type="button" id="rejoinBtn" class="secondary hidden" style="background:#3b82f6;color:white" onclick="rejoinGame()">🔄 കഴിഞ്ഞ കളി തുടരുക (Rejoin)</button>
   </div>
 
+  <!-- MULTIPLAYER LOBBY -->
+  <div id="lobby" class="card hidden">
+    <h2>റൂം കോഡ്: <span id="displayRoom" style="color:#facc15"></span></h2>
+    <div id="playerList" style="margin:1rem 0"></div>
+    <div id="hostControls" class="hidden">
+      <button type="button" onclick="startMultiplayerMatch()">മാച്ച് ആരംഭിക്കുക</button>
+    </div>
+    <p class="small" id="waitingMsg">ഹോസ്റ്റ് മാച്ച് ആരംഭിക്കുന്നത് വരെ കാത്തിരിക്കുക...</p>
+  </div>
+
+  <!-- GAME SCREEN -->
   <div id="game" class="card hidden">
     <div class="scoreboard">
+      <div>ഇന്നിങ്സ്: <b id="inningsTitle">ടീം A ബാറ്റിംഗ്</b></div>
       <div>സ്കോർ: <b id="score">0</b>/<b id="wickets">0</b></div>
       <div>ഓവർ: <b id="over">0.0</b></div>
+      <div id="targetBox" class="hidden" style="width:100%;color:#facc15;margin-top:0.3rem">ടാർഗെറ്റ്: <b id="targetScore">0</b></div>
     </div>
+    
     <div class="timer" id="timer">10</div>
-    <div id="questionBox">
-      <h3 id="qText" style="margin-bottom:1rem;font-size:1.1rem">ചോദ്യം ഇവിടെ വരും</h3>
+
+    <!-- BOWLER PANEL (Solo Mode) -->
+    <div id="soloBowlerPanel" class="card">
+      <h3>ബൗളർ പാനൽ (ചോദ്യം തിരഞ്ഞെടുക്കുക)</h3>
+      <select id="qSelect"></select>
+      <button type="button" onclick="soloAskQuestion()">ചോദ്യം നൽകുക</button>
+    </div>
+
+    <!-- QUESTION / BATSMAN PANEL -->
+    <div id="questionCard" class="card hidden">
+      <h3 id="question" style="font-size:1rem;margin-bottom:1rem"></h3>
       <div id="options"></div>
     </div>
-    <div id="resultMsg" style="text-align:center;font-weight:bold;margin-top:1rem;font-size:1.2rem"></div>
-    <button type="button" style="background:#ef4444;color:white;margin-top:1.5rem" onclick="quitGame()">ഹോം പേജിലേക്ക് പോവുക</button>
+
+    <div id="resultMsg" style="text-align:center;font-weight:bold;margin-top:1rem;font-size:1.1rem"></div>
+    <button type="button" class="secondary" style="background:#ef4444;color:white;margin-top:1.5rem" onclick="quitGame()">ഹോം പേജിലേക്ക് പോവുക</button>
   </div>
 
+  <!-- SUMMARY SCREEN -->
   <div id="summary" class="card hidden">
-    <h2>മാച്ച് അവസാനിപ്പിച്ചു</h2>
-    <p id="finalScoreText" style="margin:1rem 0;font-size:1.2rem"></p>
-    <button type="button" onclick="quitGame()">പുതിയ ഗെയിം തുടങ്ങുക</button>
+    <h2>മാച്ച് ഫലം</h2>
+    <div id="summaryContent" style="margin:1rem 0;font-size:1.1rem;line-height:1.6"></div>
+    <button type="button" onclick="quitGame()">ഹോം പേജിലേക്ക്</button>
   </div>
 </div>
 
 <script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBKQQRIcz1eEsz-V0r8WYsOCXBjAsR6XNQ",
+  authDomain: "zaman-6587f.firebaseapp.com",
+  databaseURL: "https://zaman-6587f-default-rtdb.firebaseio.com",
+  projectId: "zaman-6587f",
+  storageBucket: "zaman-6587f.firebasestorage.app",
+  messagingSenderId: "985807833692",
+  appId: "1:985807833692:web:4d331bd0b2e8db0fcdb499"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
 const questions = [
   {q:"ഇലക്ട്രോണുകൾ ചലിക്കാൻ നൽകുന്ന ശക്തിയെ എന്ത് പറയുന്നു?",o:["Current","Voltage (EMF)","Resistance","Power"],a:1},
   {q:"Voltage-ന്റെ മറ്റൊരു പേര് എന്താണ്?",o:["Current","Electro Motive Force","Resistance","Power"],a:1},
@@ -70,58 +120,102 @@ const questions = [
   {q:"Diode-ൽ P ഭാഗത്തെ എന്ത് പറയുന്നു?",o:["Cathode","Anode","Base","Emitter"],a:1}
 ];
 
-let score = 0, wickets = 0, ball = 0, over = 0, currentIdx = 0, timer = null, timeLeft = 10;
+let isSolo = true;
+let soloState = {
+  innings: 1, // 1 for Team A, 2 for Team B
+  scoreA: 0, wicketsA: 0,
+  scoreB: 0, wicketsB: 0,
+  ball: 0, over: 0,
+  used: [], currentQ: null, target: 0
+};
+
+let timer = null, timeLeft = 10, startTime = 0;
+let roomId = null, playerId = null, gameRef = null;
 
 window.onload = function() {
-  const savedGame = localStorage.getItem('zaman_quiz_save');
-  if(savedGame) {
+  if(localStorage.getItem('zaman_solo_save') || localStorage.getItem('zaman_mp_room')) {
     document.getElementById('rejoinBtn').classList.remove('hidden');
   }
 };
 
-function startSoloGame(isRejoin) {
-  const name = document.getElementById('playerName').value.trim();
-  if(!name) return alert("ദയവായി പേര് നൽകുക");
+function getQuestionType(over){
+  if(over < 2) return {time: 10, label: "MCQ (10 സെക്കൻഡ്)"};
+  return {time: 20, label: "MCQ (20 സെക്കൻഡ്)"};
+}
 
-  if(isRejoin) {
-    const saved = JSON.parse(localStorage.getItem('zaman_quiz_save'));
-    if(saved) {
-      score = saved.score;
-      wickets = saved.wickets;
-      ball = saved.ball;
-      over = saved.over;
-      currentIdx = saved.currentIdx;
-    }
+function calcRuns(time, limit){
+  const ratio = time / limit;
+  if(ratio <= 0.3) return 6;
+  if(ratio <= 0.5) return 4;
+  if(ratio <= 0.7) return 2;
+  if(ratio <= 1.0) return 1;
+  return 0;
+}
+
+// --- SOLO MODE LOGIC ---
+function startSoloMode() {
+  isSolo = true;
+  const saved = localStorage.getItem('zaman_solo_save');
+  if(saved) {
+    soloState = JSON.parse(saved);
   } else {
-    score = 0; wickets = 0; ball = 0; over = 0; currentIdx = 0;
-    saveGameState();
+    soloState = { innings: 1, scoreA: 0, wicketsA: 0, scoreB: 0, wicketsB: 0, ball: 0, over: 0, used: [], currentQ: null, target: 0 };
+    saveSoloState();
   }
-  
+
   document.getElementById('home').classList.add('hidden');
   document.getElementById('game').classList.remove('hidden');
-  updateScoreboard();
-  loadNextQuestion();
-}
-
-function saveGameState() {
-  const state = { score, wickets, ball, over, currentIdx };
-  localStorage.setItem('zaman_quiz_save', JSON.stringify(state));
-}
-
-function updateScoreboard() {
-  document.getElementById('score').textContent = score;
-  document.getElementById('wickets').textContent = wickets;
-  document.getElementById('over').textContent = over + "." + ball;
-}
-
-function loadNextQuestion() {
-  if(currentIdx >= questions.length || wickets >= 1 || over >= 3) {
-    endGame();
-    return;
-  }
+  document.getElementById('soloBowlerPanel').classList.remove('hidden');
   
-  const q = questions[currentIdx];
-  document.getElementById('qText').textContent = (currentIdx + 1) + ". " + q.q;
+  updateSoloUI();
+  populateSoloQSelect();
+}
+
+function saveSoloState() {
+  localStorage.setItem('zaman_solo_save', JSON.stringify(soloState));
+}
+
+function updateSoloUI() {
+  const currentScore = soloState.innings === 1 ? soloState.scoreA : soloState.scoreB;
+  const currentWickets = soloState.innings === 1 ? soloState.wicketsA : soloState.wicketsB;
+  
+  document.getElementById('inningsTitle').textContent = soloState.innings === 1 ? "ടീം A ബാറ്റിംഗ് (ബൗൾ ചെയ്യുന്നത് ടീം B)" : "ടീം B ബാറ്റിംഗ് (ടാർഗെറ്റ്: " + soloState.target + ")";
+  document.getElementById('score').textContent = currentScore;
+  document.getElementById('wickets').textContent = currentWickets;
+  document.getElementById('over').textContent = soloState.over + "." + soloState.ball;
+  
+  if(soloState.innings === 2) {
+    document.getElementById('targetBox').classList.remove('hidden');
+    document.getElementById('targetScore').textContent = soloState.target;
+  }
+}
+
+function populateSoloQSelect() {
+  const sel = document.getElementById('qSelect');
+  sel.innerHTML = "";
+  questions.forEach((q, i) => {
+    if(!soloState.used.includes(i)) {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = (i+1) + ". " + q.q;
+      sel.appendChild(opt);
+    }
+  });
+  if(sel.options.length === 0) {
+    sel.innerHTML = "<option>എല്ലാ ചോദ്യങ്ങളും തീർന്നു</option>";
+  }
+}
+
+function soloAskQuestion() {
+  const val = document.getElementById('qSelect').value;
+  if(val === "" || val.includes("തീർന്നു")) return alert("ഒരു ചോദ്യം തിരഞ്ഞെടുക്കുക");
+  
+  soloState.currentQ = parseInt(val);
+  document.getElementById('soloBowlerPanel').classList.add('hidden');
+  document.getElementById('questionCard').classList.remove('hidden');
+  
+  const q = questions[soloState.currentQ];
+  document.getElementById('question').textContent = q.q;
   const optDiv = document.getElementById('options');
   optDiv.innerHTML = "";
   
@@ -129,13 +223,14 @@ function loadNextQuestion() {
     const btn = document.createElement('div');
     btn.className = 'option';
     btn.textContent = opt;
-    btn.onclick = () => checkAnswer(i, q.a);
+    btn.onclick = () => submitSoloAnswer(i);
     optDiv.appendChild(btn);
   });
-  
-  timeLeft = 10;
+
+  const qt = getQuestionType(soloState.over);
+  timeLeft = qt.time;
   document.getElementById('timer').textContent = timeLeft;
-  document.getElementById('resultMsg').textContent = "";
+  startTime = Date.now();
   
   clearInterval(timer);
   timer = setInterval(() => {
@@ -143,47 +238,174 @@ function loadNextQuestion() {
     document.getElementById('timer').textContent = timeLeft;
     if(timeLeft <= 0) {
       clearInterval(timer);
-      checkAnswer(-1, q.a);
+      submitSoloAnswer(-1); // Timeout = Wicket
     }
   }, 1000);
 }
 
-function checkAnswer(selected, correct) {
+function submitSoloAnswer(selected) {
   clearInterval(timer);
-  const msg = document.getElementById('resultMsg');
+  const timeTaken = (Date.now() - startTime) / 1000;
+  const q = questions[soloState.currentQ];
+  const qt = getQuestionType(soloState.over);
   
-  if(selected === correct) {
-    score += 4;
-    msg.style.color = "#22c55e";
-    msg.textContent = "ശരിയാണ്! 4 റൺസ് നേടി";
+  let runs = 0, wicket = false;
+  if(selected === q.a) {
+    runs = calcRuns(timeTaken, qt.time);
+    if(runs === 0) wicket = true;
   } else {
-    wickets++;
-    msg.style.color = "#ef4444";
-    msg.textContent = "വിക്കറ്റ് നഷ്ടമായി!";
+    wicket = true;
   }
-  
-  ball++;
-  if(ball >= 6) {
-    ball = 0;
-    over++;
+
+  if(soloState.innings === 1) {
+    soloState.scoreA += runs;
+    if(wicket) soloState.wicketsA++;
+  } else {
+    soloState.scoreB += runs;
+    if(wicket) soloState.wicketsB++;
   }
+
+  soloState.ball++;
+  if(soloState.ball >= 6) {
+    soloState.ball = 0;
+    soloState.over++;
+  }
+  soloState.used.push(soloState.currentQ);
+
+  showResultPopup(runs, wicket);
+  document.getElementById('questionCard').classList.add('hidden');
   
-  updateScoreboard();
-  currentIdx++;
-  saveGameState();
-  
-  setTimeout(loadNextQuestion, 1500);
+  // Check Innings End
+  if(soloState.innings === 1 && (soloState.wicketsA >= 2 || soloState.over >= 3)) {
+    soloState.target = soloState.scoreA + 1;
+    soloState.innings = 2;
+    soloState.over = 0;
+    soloState.ball = 0;
+    soloState.used = [];
+    alert("ടീം A യുടെ ഇന്നിങ്സ് അവസാനിച്ചു! ടാർഗെറ്റ്: " + soloState.target);
+  } else if(soloState.innings === 2) {
+    if(soloState.scoreB >= soloState.target) {
+      endSoloGame("ടീം B വിജയിച്ചു! 🎉");
+      return;
+    }
+    if(soloState.wicketsB >= 2 || soloState.over >= 3) {
+      if(soloState.scoreB >= soloState.target) {
+        endSoloGame("ടീം B വിജയിച്ചു! 🎉");
+      } else if(soloState.scoreB === soloState.target - 1) {
+        endSoloGame("കളി ടൈ ആയി! 🤝");
+      } else {
+        endSoloGame("ടീം A വിജയിച്ചു! 🎉");
+      }
+      return;
+    }
+  }
+
+  saveSoloState();
+  updateSoloUI();
+  populateSoloQSelect();
+  document.getElementById('soloBowlerPanel').classList.remove('hidden');
 }
 
-function endGame() {
-  localStorage.removeItem('zaman_quiz_save');
+function showResultPopup(runs, wicket) {
+  const msg = document.getElementById('resultMsg');
+  msg.textContent = wicket ? "വിക്കറ്റ് നഷ്ടമായി!" : (runs + " റൺസ് നേടി!");
+  msg.style.color = wicket ? "#ef4444" : "#22c55e";
+  setTimeout(() => { msg.textContent = ""; }, 2000);
+}
+
+function endSoloGame(resultText) {
+  localStorage.removeItem('zaman_solo_save');
   document.getElementById('game').classList.add('hidden');
   document.getElementById('summary').classList.remove('hidden');
-  document.getElementById('finalScoreText').textContent = "മൊത്തം സ്കോർ: " + score + "/" + wickets;
+  document.getElementById('summaryContent').innerHTML = `
+    <b>ടീം A സ്കോർ:</b> ${soloState.scoreA}/${soloState.wicketsA}<br>
+    <b>ടീം B സ്കോർ:</b> ${soloState.scoreB}/${soloState.wicketsB}<br><br>
+    <h3 style="color:#facc15">${resultText}</h3>
+  `;
+}
+
+// --- MULTIPLAYER & REJOIN LOGIC ---
+function createMultiplayerRoom() {
+  const name = document.getElementById('playerName').value.trim() || "Player";
+  roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+  playerId = "p_" + Date.now();
+  
+  localStorage.setItem('zaman_mp_room', roomId);
+  localStorage.setItem('zaman_mp_player', playerId);
+
+  gameRef = db.ref("rooms/" + roomId);
+  gameRef.set({
+    host: playerId,
+    players: { [playerId]: { name: name, role: "host" } },
+    status: "lobby"
+  });
+
+  enterLobby();
+}
+
+function joinMultiplayerRoom() {
+  const name = document.getElementById('playerName').value.trim() || "Player";
+  roomId = document.getElementById('roomCode').value.trim().toUpperCase();
+  if(!roomId) return alert("റൂം കോഡ് നൽകുക");
+
+  playerId = "p_" + Date.now();
+  localStorage.setItem('zaman_mp_room', roomId);
+  localStorage.setItem('zaman_mp_player', playerId);
+
+  gameRef = db.ref("rooms/" + roomId);
+  gameRef.once("value", snap => {
+    if(!snap.exists()) return alert("റൂം കണ്ടെത്തിയില്ല");
+    gameRef.child("players/" + playerId).set({ name: name, role: "player" });
+    enterLobby();
+  });
+}
+
+function enterLobby() {
+  document.getElementById('home').classList.add('hidden');
+  document.getElementById('lobby').classList.remove('hidden');
+  document.getElementById('displayRoom').textContent = roomId;
+
+  gameRef.on("value", snap => {
+    const d = snap.val();
+    if(!d) return;
+    let listHtml = "<b>പ്ലേയേഴ്സ്:</b><br>";
+    let isHost = d.host === playerId;
+    
+    Object.values(d.players || {}).forEach(p => {
+      listHtml += `• ${p.name}<br>`;
+    });
+    document.getElementById('playerList').innerHTML = listHtml;
+
+    if(isHost) {
+      document.getElementById('hostControls').classList.remove('hidden');
+      document.getElementById('waitingMsg').classList.add('hidden');
+    }
+
+    if(d.status === "playing") {
+      document.getElementById('lobby').classList.add('hidden');
+      document.getElementById('game').classList.remove('hidden');
+      document.getElementById('soloBowlerPanel').classList.add('hidden');
+      // Multiplayer game sync can be handled here
+    }
+  });
+}
+
+function startMultiplayerMatch() {
+  gameRef.update({ status: "playing" });
+}
+
+function rejoinGame() {
+  if(localStorage.getItem('zaman_solo_save')) {
+    startSoloMode();
+  } else if(localStorage.getItem('zaman_mp_room')) {
+    roomId = localStorage.getItem('zaman_mp_room');
+    playerId = localStorage.getItem('zaman_mp_player');
+    gameRef = db.ref("rooms/" + roomId);
+    enterLobby();
+  }
 }
 
 function quitGame() {
-  localStorage.removeItem('zaman_quiz_save');
   location.reload();
 }
 </script>
