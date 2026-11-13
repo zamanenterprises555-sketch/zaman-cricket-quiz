@@ -40,7 +40,7 @@ input,select{width:100%;padding:0.8rem;border-radius:10px;border:none;margin:0.5
       <input id="roomCodeInput" placeholder="റൂം കോഡ് നൽകുക" maxlength="6" style="text-transform:uppercase">
       <button type="button" class="secondary" onclick="joinRoom()">റൂമിൽ ജോയിൻ ചെയ്യുക</button>
     </div>
-    <!-- Rejoin Button linked with rejoin.js -->
+    <!-- Rejoin Button -->
     <button type="button" id="rejoinBtn" class="secondary hidden" style="background:#3b82f6;color:white" onclick="autoRejoin()">🔄 കഴിഞ്ഞ കളി തുടരുക (Auto Rejoin)</button>
   </div>
 
@@ -153,7 +153,6 @@ function createRoom() {
   playerId = "p_" + Date.now();
   myRole = "host";
 
-  // LocalStorage-ൽ സേവ് ചെയ്യുന്നു
   localStorage.setItem('zaman_mp_room', roomId);
   localStorage.setItem('zaman_mp_player', playerId);
 
@@ -176,7 +175,6 @@ function joinRoom() {
 
   playerId = "p_" + Date.now();
   
-  // LocalStorage-ൽ സേവ് ചെയ്യുന്നു
   localStorage.setItem('zaman_mp_room', roomId);
   localStorage.setItem('zaman_mp_player', playerId);
 
@@ -240,16 +238,25 @@ function startTossPhase(data) {
   }
 }
 
+// Fixed performToss function
 function performToss(choice) {
   const outcomes = ["Heads", "Tails"];
   const result = outcomes[Math.floor(Math.random() * outcomes.length)];
   const tossWon = (choice === result);
-  const winnerId = tossWon ? playerId : Object.keys(roomRef.child("players")).find(id => id !== playerId);
+  
+  roomRef.once("value", snap => {
+    const data = snap.val();
+    const playersObj = data.players || {};
+    const playerIds = Object.keys(playersObj);
+    
+    const otherPlayerId = playerIds.find(id => id !== playerId) || playerId;
+    const winnerId = tossWon ? playerId : otherPlayerId;
 
-  roomRef.update({
-    status: "set_selection",
-    tossWinner: winnerId,
-    tossResult: result
+    roomRef.update({
+      status: "set_selection",
+      tossWinner: winnerId,
+      tossResult: result
+    });
   });
 }
 
