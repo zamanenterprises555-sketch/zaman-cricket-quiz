@@ -9,7 +9,7 @@ ok(room.teams.A.captain==='h'&&room.teams.B.captain==='b1','captains');
 ok(X({type:'set',name:'OPTIONAL QUESTIONS 1'},'h'),'unplayable set blocked');
 ok(X({type:'start'},'a2'),'non-host start blocked');
 R({type:'captain',team:'A',pid:'a2'});ok(room.teams.A.captain==='a2','captain change');
-R({type:'start'});const inn=()=>E.cur(room.g);
+R({type:'toss',coin:0.1});R({type:'tossChoice',choice:'bat'},'a2');R({type:'start'});const inn=()=>E.cur(room.g);
 ok(room.g.limit===60,'limit 60'); ok(inn().bowler==='b1','auto bowler (team of 1)');
 ok(X({type:'setBatters',striker:'a3',non:'a4'},'a3'),'non-captain blocked');
 R({type:'setBatters',striker:'a3',non:'a4'},'a2'); ok(room.g.phase==='select','select');
