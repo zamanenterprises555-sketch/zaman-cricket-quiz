@@ -1,0 +1,355 @@
+/* Zaman Cricket Quiz - game engine (v2)
+ * Pure rules shared by Solo and Multiplayer. Solo applies these actions to a
+ * local copy; multiplayer applies the SAME actions inside a Firebase
+ * transaction. So if Solo plays correctly, multiplayer follows the same rules.
+ */
+(function (root) {
+  'use strict';
+  var BALLS_PER_OVER = 6, OVERS = 5, SET_SIZE = 30, MAX_TEAM = 11;
+
+  // Set types. limit = seconds per ball. Run bands are the same fractions of
+  // the limit as the 10-second OPTIONAL set (2/4/6/8/10 s).
+  var SET_TYPES = [
+    { key: 'OPTIONAL QUESTIONS', ml: 'ഓപ്ഷൻ ചോദ്യങ്ങൾ', limit: 10, re: /^OPTIONAL/ },
+    { key: 'ONE WORD QUESTIONS', ml: 'ഒറ്റവാക്ക് ഉത്തരം', limit: 60, re: /^ONE\s*WORD/ },
+    { key: 'MINIMUM 3 SENTENCES', ml: 'കുറഞ്ഞത് 3 വാക്യം', limit: 180, re: /^MINIMUM\s*3/ },
+    { key: 'MINIMUM 5 SENTENCES', ml: 'കുറഞ്ഞത് 5 വാക്യം', limit: 300, re: /^MINIMUM\s*5/ },
+    { key: 'PICTURE IDENTIFYING', ml: 'ചിത്രം തിരിച്ചറിയൽ', limit: 300, re: /^PICTURE/ }
+  ];
+  var BANDS = [[0.2, 6], [0.4, 4], [0.6, 3], [0.8, 2], [1.0, 1]];
+
+  function setType(name) {
+    var n = String(name || '').toUpperCase().replace(/\s+/g, ' ').trim();
+    for (var i = 0; i < SET_TYPES.length; i++) if (SET_TYPES[i].re.test(n)) return SET_TYPES[i];
+    return null;
+  }
+  function limitFor(setName) { var t = setType(setName); return t ? t.limit : 10; }
+  // runs for an answer time; -1 = out (time over)
+  function runsFor(t, limit) {
+    if (!(t <= limit)) return -1;
+    for (var i = 0; i < BANDS.length; i++) if (t <= BANDS[i][0] * limit + 1e-9) return BANDS[i][1];
+    return 1;
+  }
+  function bands(limit) {
+    var prev = 0;
+    return BANDS.map(function (b) { var r = { from: prev, to: b[0] * limit, runs: b[1] }; prev = r.to; return r; });
+  }
+  function isMcq(q) { return !!q && Array.isArray(q.o) && q.o.length > 0; }
+  function setNumber(name) { var m = String(name).match(/(\d+)\s*$/); return m ? +m[1] : 0; }
+
+  // All five types, each with its sets (sorted by number). A set is playable
+  // only when it has 30 questions.
+  function listSets(qs) {
+    qs = qs || {};
+    return SET_TYPES.map(function (t) {
+      var sets = Object.keys(qs).filter(function (k) { var st = setType(k); return st && st.key === t.key; })
+        .sort(function (a, b) { return setNumber(a) - setNumber(b); })
+        .map(function (k) { var n = (qs[k] || []).length; return { name: k, count: n, ok: n >= SET_SIZE }; });
+      return { type: t, sets: sets };
+    });
+  }
+  function setPlayable(qs, name) { return !!(qs && qs[name] && qs[name].length >= SET_SIZE && setType(name)); }
+
+  function clone(o) { return JSON.parse(JSON.stringify(o)); }
+  function teamIds(room, team) {
+    return Object.keys(room.players || {}).filter(function (id) { return room.players[id].team === team; })
+      .sort(function (a, b) { return (room.players[a].joinedAt || 0) - (room.players[b].joinedAt || 0) || (a < b ? -1 : 1); });
+  }
+  function other(t) { return t === 'A' ? 'B' : 'A'; }
+
+  function newRoom(o) {
+    var r = {
+      v: 2, code: o.code, host: o.pid, createdAt: o.now || 0, solo: !!o.solo,
+      status: 'lobby', set: o.set || 'OPTIONAL QUESTIONS 1', firstBat: 'A',
+      teams: { A: { name: o.teamA || 'ടീം A', captain: '' }, B: { name: o.teamB || 'ടീം B', captain: '' } },
+      players: {}
+    };
+    r.players[o.pid] = { name: o.name, team: '', online: true, joinedAt: o.now || 0 };
+    return r;
+  }
+
+  function newInnings(bat, bowl) {
+    return { bat: bat, bowl: bowl, runs: 0, wkts: 0, extras: 0, balls: 0, striker: '', non: '', bowler: '', prevBowler: '',
+      used: {}, out: {}, bs: {}, bw: {}, overBalls: [], log: [] };
+  }
+
+  function normalize(room) {
+    if (!room) return room;
+    room.players = room.players || {};
+    room.teams = room.teams || {};
+    ['A', 'B'].forEach(function (t) {
+      room.teams[t] = room.teams[t] || {};
+      if (room.teams[t].name == null) room.teams[t].name = 'ടീം ' + t;
+      if (room.teams[t].captain == null) room.teams[t].captain = '';
+    });
+    Object.keys(room.players).forEach(function (id) { var p = room.players[id]; if (p.team == null) p.team = ''; });
+    var g = room.g;
+    if (g) {
+      g.order = g.order || {}; g.order.A = g.order.A || []; g.order.B = g.order.B || [];
+      g.inn = g.inn || [];
+      g.inn.forEach(function (x) {
+        ['used', 'out', 'bs', 'bw'].forEach(function (k) { x[k] = x[k] || {}; });
+        x.overBalls = x.overBalls || []; x.log = x.log || [];
+        ['striker', 'non', 'bowler', 'prevBowler'].forEach(function (k) { if (x[k] == null) x[k] = ''; });
+        ['runs', 'wkts', 'extras', 'balls'].forEach(function (k) { x[k] = x[k] || 0; });
+      });
+      g.pending = g.pending || [];
+      if (g.q == null) g.q = -1;
+      g.seq = g.seq || 0;
+      if (g.chooser == null) g.chooser = '';
+    }
+    return room;
+  }
+
+  function cur(g) { return g.inn[g.innings - 1]; }
+  function box(inn) {
+    var over = Math.floor(inn.balls / BALLS_PER_OVER), out = [];
+    for (var i = over * BALLS_PER_OVER; i < over * BALLS_PER_OVER + BALLS_PER_OVER; i++) out.push(i);
+    return out;
+  }
+  function candidates(g, inn) {
+    return g.order[inn.bat].filter(function (id) { return !inn.out[id] && id !== inn.striker && id !== inn.non; });
+  }
+  var ADMIN = function (room, by) { return by === 'solo' || by === room.host; };
+  function isCaptain(room, by, team) { return ADMIN(room, by) || room.teams[team].captain === by; }
+
+  function startInnings(room) {
+    var g = room.g, inn = cur(g);
+    var batIds = g.order[inn.bat], bowlIds = g.order[inn.bowl];
+    if (batIds.length === 1) { inn.striker = batIds[0]; inn.non = ''; }
+    if (bowlIds.length === 1) inn.bowler = bowlIds[0];
+    g.phase = 'openers'; g.q = -1; g.pending = []; g.chooser = '';
+    checkOpeners(room);
+  }
+  function checkOpeners(room) {
+    var g = room.g, inn = cur(g);
+    var batSize = g.order[inn.bat].length;
+    if (g.phase === 'openers' && inn.striker && (inn.non || batSize === 1) && inn.bowler) g.phase = 'select';
+  }
+  function advance(room) {
+    var g = room.g;
+    g.phase = g.pending.length ? g.pending[0] : 'select';
+    var inn = cur(g);
+    g.chooser = g.phase === 'nextBowler' ? inn.prevBowler : (g.phase === 'nextBatsman' ? g.chooserBat || '' : '');
+  }
+
+  function endInnings(room) {
+    var g = room.g, inn = cur(g);
+    g.pending = []; g.q = -1;
+    if (g.innings === 1) {
+      g.target = inn.runs + 1;
+      g.innings = 2;
+      g.inn.push(newInnings(inn.bowl, inn.bat));
+      g.banner = { seq: g.seq, kind: 'innings' };
+      startInnings(room);
+    } else {
+      var i1 = g.inn[0], i2 = g.inn[1], res;
+      if (i2.runs >= g.target) {
+        var left = g.order[i2.bat].length - i2.wkts;
+        res = { winner: i2.bat, by: 'wkts', margin: left };
+      } else if (i2.runs === g.target - 1) {
+        res = { winner: i1.bat, by: 'level', margin: 0 };
+      } else {
+        res = { winner: i1.bat, by: 'runs', margin: g.target - 1 - i2.runs };
+      }
+      g.result = res;
+      g.phase = 'done';
+      room.status = 'finished';
+    }
+  }
+
+  // kind: 'runs' | 'bowled' (wrong answer) | 'timeout' | 'extra' (bowler wrong)
+  function finishBall(room, kind, runs, time) {
+    var g = room.g, inn = cur(g), st = inn.striker, bwId = inn.bowler;
+    var wicket = kind === 'bowled' || kind === 'timeout';
+    inn.used['q' + g.q] = true;
+    inn.balls++;
+    var bs = inn.bs[st] = inn.bs[st] || { r: 0, b: 0 };
+    var bw = inn.bw[bwId] = inn.bw[bwId] || { r: 0, w: 0, b: 0 };
+    bw.b++;
+    var sym;
+    if (kind === 'extra') { inn.runs += 1; inn.extras += 1; bw.r += 1; sym = 'Ex'; runs = 1; }
+    else if (!wicket) { inn.runs += runs; bs.r += runs; bs.b++; bw.r += runs; sym = String(runs); }
+    else { inn.wkts++; inn.out[st] = true; bs.b++; bw.w++; sym = 'W'; runs = 0; }
+    inn.overBalls.push(sym); inn.log.push(sym);
+    g.last = { seq: g.seq, kind: kind, runs: runs, time: time == null ? -1 : Math.round(time * 100) / 100,
+      batter: st, bowler: bwId, innings: g.innings, ball: inn.balls };
+    g.q = -1; g.pend = null;
+
+    var batSize = g.order[inn.bat].length;
+    if (inn.wkts >= batSize || inn.balls >= OVERS * BALLS_PER_OVER || (g.innings === 2 && inn.runs >= g.target)) {
+      endInnings(room); return;
+    }
+    var overEnd = inn.balls % BALLS_PER_OVER === 0;
+    if (overEnd) inn.overBalls = [];
+    g.pending = [];
+    if (wicket) inn.striker = '';
+    if (kind === 'runs' && (runs === 1 || runs === 3) && inn.non) { var t = inn.striker; inn.striker = inn.non; inn.non = t; }
+    if (overEnd && inn.non) { var t2 = inn.striker; inn.striker = inn.non; inn.non = t2; }
+    if (!inn.striker || (!inn.non && batSize > 1 && wicket)) {
+      var c = candidates(g, inn);
+      if (c.length === 0) {
+        // last batsman bats alone
+        if (!inn.striker) { inn.striker = inn.non; inn.non = ''; }
+      } else if (c.length === 1) {
+        if (!inn.striker) inn.striker = c[0]; else inn.non = c[0];
+      } else {
+        g.pending.push('nextBatsman'); g.chooserBat = st;
+      }
+    }
+    if (overEnd) {
+      inn.prevBowler = bwId;
+      if (g.order[inn.bowl].length > 1) { inn.bowler = ''; g.pending.push('nextBowler'); }
+    }
+    advance(room);
+  }
+
+  function reduce(roomIn, a, qs) {
+    var room = normalize(clone(roomIn));
+    var by = a.by, g = room.g, P = room.players;
+    function err(m) { return { error: m }; }
+    switch (a.type) {
+      case 'join': {
+        if (P[a.pid]) { P[a.pid].online = true; if (a.name) P[a.pid].name = a.name; }
+        else P[a.pid] = { name: a.name || 'കളിക്കാരൻ', team: '', online: true, joinedAt: a.now || 0 };
+        return { room: room };
+      }
+      case 'team': {
+        if (room.status !== 'lobby') return err('കളി തുടങ്ങിക്കഴിഞ്ഞു');
+        var pid = a.pid || by;
+        if (!P[pid]) return err('കളിക്കാരനെ കണ്ടില്ല');
+        if (pid !== by && !ADMIN(room, by)) return err('അനുവാദമില്ല');
+        var t = a.team === 'A' || a.team === 'B' ? a.team : '';
+        if (t && P[pid].team !== t && teamIds(room, t).length >= MAX_TEAM) return err('ഈ ടീമിൽ 11 പേർ ആയി');
+        var old = P[pid].team;
+        P[pid].team = t;
+        if (old && room.teams[old].captain === pid) { var rest = teamIds(room, old); room.teams[old].captain = rest[0] || ''; }
+        if (t && !room.teams[t].captain) room.teams[t].captain = pid;
+        return { room: room };
+      }
+      case 'captain': {
+        if (!isCaptain(room, by, a.team)) return err('ക്യാപ്റ്റനോ ഹോസ്റ്റിനോ മാത്രം');
+        if (!P[a.pid] || P[a.pid].team !== a.team) return err('ആ ടീമിലെ ആളല്ല');
+        room.teams[a.team].captain = a.pid; return { room: room };
+      }
+      case 'teamName': {
+        if (room.status !== 'lobby') return err('കളി തുടങ്ങിക്കഴിഞ്ഞു');
+        if (!isCaptain(room, by, a.team)) return err('ക്യാപ്റ്റനോ ഹോസ്റ്റിനോ മാത്രം');
+        var nm = String(a.name || '').trim().slice(0, 24);
+        if (!nm) return err('പേര് നൽകുക');
+        room.teams[a.team].name = nm; return { room: room };
+      }
+      case 'set': {
+        if (!ADMIN(room, by)) return err('ഹോസ്റ്റിന് മാത്രം');
+        if (room.status !== 'lobby') return err('കളി തുടങ്ങിക്കഴിഞ്ഞു');
+        if (!setPlayable(qs, a.name)) return err('ഈ സെറ്റ് ഉടൻ വരുന്നു');
+        room.set = a.name; return { room: room };
+      }
+      case 'firstBat': {
+        if (!ADMIN(room, by)) return err('ഹോസ്റ്റിന് മാത്രം');
+        room.firstBat = a.team === 'B' ? 'B' : 'A'; return { room: room };
+      }
+      case 'start': {
+        if (!ADMIN(room, by)) return err('ഹോസ്റ്റിന് മാത്രം');
+        if (room.status !== 'lobby') return err('കളി തുടങ്ങിക്കഴിഞ്ഞു');
+        if (!setPlayable(qs, room.set)) return err('സെറ്റ് തിരഞ്ഞെടുക്കുക');
+        var A = teamIds(room, 'A'), B = teamIds(room, 'B');
+        if (!A.length || !B.length) return err('രണ്ട് ടീമിലും കുറഞ്ഞത് ഒരാൾ വേണം');
+        ['A', 'B'].forEach(function (t) { if (!room.teams[t].captain || P[room.teams[t].captain].team !== t) room.teams[t].captain = teamIds(room, t)[0]; });
+        var fb = room.firstBat || 'A';
+        room.g = { innings: 1, order: { A: A, B: B }, inn: [newInnings(fb, other(fb))], target: 0, seq: 0, q: -1, pending: [], chooser: '', set: room.set, limit: limitFor(room.set) };
+        room.status = 'playing';
+        startInnings(room);
+        return { room: room };
+      }
+      case 'rematch': {
+        if (!ADMIN(room, by)) return err('ഹോസ്റ്റിന് മാത്രം');
+        room.status = 'lobby'; room.g = null; return { room: room };
+      }
+    }
+    // ---- in-game actions ----
+    if (!g || room.status !== 'playing') return err('കളി നടക്കുന്നില്ല');
+    var inn = cur(g), q = g.q >= 0 ? (qs[g.set] || [])[g.q] : null, L = g.limit || limitFor(g.set);
+    switch (a.type) {
+      case 'setBatters': {
+        if (g.phase !== 'openers') return err('ഇപ്പോൾ പറ്റില്ല');
+        if (!isCaptain(room, by, inn.bat)) return err('ബാറ്റിംഗ് ക്യാപ്റ്റന് മാത്രം');
+        var ids = g.order[inn.bat];
+        if (ids.indexOf(a.striker) < 0) return err('സ്ട്രൈക്കറെ തിരഞ്ഞെടുക്കുക');
+        if (ids.length > 1 && (ids.indexOf(a.non) < 0 || a.non === a.striker)) return err('രണ്ടാമത്തെ ബാറ്റ്സ്മാനെ തിരഞ്ഞെടുക്കുക');
+        inn.striker = a.striker; inn.non = ids.length > 1 ? a.non : '';
+        checkOpeners(room); return { room: room };
+      }
+      case 'setBowler': {
+        if (g.phase !== 'openers') return err('ഇപ്പോൾ പറ്റില്ല');
+        if (!isCaptain(room, by, inn.bowl)) return err('ബൗളിംഗ് ക്യാപ്റ്റന് മാത്രം');
+        if (g.order[inn.bowl].indexOf(a.pid) < 0) return err('ബൗളറെ തിരഞ്ഞെടുക്കുക');
+        inn.bowler = a.pid; checkOpeners(room); return { room: room };
+      }
+      case 'pick': {
+        if (g.phase !== 'select') return err('ഇപ്പോൾ ചോദ്യം എടുക്കാൻ പറ്റില്ല');
+        if (by !== 'solo' && by !== inn.bowler) return err('ബൗളർക്ക് മാത്രം');
+        var qi = +a.qi;
+        if (box(inn).indexOf(qi) < 0 || inn.used['q' + qi]) return err('ഈ ചോദ്യം എടുക്കാൻ പറ്റില്ല');
+        if (!(qs[g.set] || [])[qi]) return err('ചോദ്യം കണ്ടില്ല');
+        g.q = qi; g.seq++; g.phase = 'bowlerAnswer'; return { room: room };
+      }
+      case 'bowlerAns': {
+        if (g.phase !== 'bowlerAnswer') return err('ഇപ്പോൾ പറ്റില്ല');
+        if (by !== 'solo' && by !== inn.bowler) return err('ബൗളർക്ക് മാത്രം');
+        var ok = isMcq(q) ? (+a.choice === q.a) : !!a.ok;
+        g.lastBowler = { seq: g.seq, ok: ok };
+        if (ok) { g.phase = 'bat'; g.deliveredAt = a.now || 0; return { room: room }; }
+        finishBall(room, 'extra', 1, null); return { room: room };
+      }
+      case 'batAns': {
+        if (g.phase !== 'bat') return err('ഇപ്പോൾ പറ്റില്ല');
+        if (a.seq != null && a.seq !== g.seq) return err('ഈ പന്ത് കഴിഞ്ഞു');
+        if (by !== 'solo' && by !== inn.striker) return err('സ്ട്രൈക്കർക്ക് മാത്രം');
+        var tm = Math.max(0, +a.time || 0);
+        if (!(tm <= L)) { finishBall(room, 'timeout', 0, tm); return { room: room }; }
+        if (isMcq(q)) {
+          if (+a.choice === q.a) finishBall(room, 'runs', runsFor(tm, L), tm);
+          else finishBall(room, 'bowled', 0, tm);
+        } else {
+          g.pend = { text: String(a.text || '').slice(0, 2000), time: tm }; g.phase = 'judge';
+        }
+        return { room: room };
+      }
+      case 'timeout': {
+        if (g.phase !== 'bat' || a.seq !== g.seq) return err('ഈ പന്ത് കഴിഞ്ഞു');
+        finishBall(room, 'timeout', 0, L + 0.01); return { room: room };
+      }
+      case 'judge': {
+        if (g.phase !== 'judge') return err('ഇപ്പോൾ പറ്റില്ല');
+        if (by !== inn.bowler && !isCaptain(room, by, inn.bowl)) return err('ബൗളർക്ക് മാത്രം');
+        var t3 = (g.pend && g.pend.time) || 0;
+        if (a.ok) { var r = runsFor(t3, L); if (r < 0) finishBall(room, 'timeout', 0, t3); else finishBall(room, 'runs', r, t3); }
+        else finishBall(room, 'bowled', 0, t3);
+        return { room: room };
+      }
+      case 'nextBatsman': {
+        if (g.phase !== 'nextBatsman') return err('ഇപ്പോൾ പറ്റില്ല');
+        if (by !== g.chooser && !isCaptain(room, by, inn.bat)) return err('ഔട്ടായ ബാറ്റ്സ്മാനോ ക്യാപ്റ്റനോ മാത്രം');
+        if (candidates(g, inn).indexOf(a.pid) < 0) return err('ആളെ തിരഞ്ഞെടുക്കുക');
+        if (!inn.striker) inn.striker = a.pid; else inn.non = a.pid;
+        g.pending.shift(); advance(room); return { room: room };
+      }
+      case 'nextBowler': {
+        if (g.phase !== 'nextBowler') return err('ഇപ്പോൾ പറ്റില്ല');
+        if (by !== inn.prevBowler && !isCaptain(room, by, inn.bowl)) return err('കഴിഞ്ഞ ബൗളറോ ക്യാപ്റ്റനോ മാത്രം');
+        var bids = g.order[inn.bowl];
+        if (bids.indexOf(a.pid) < 0) return err('ബൗളറെ തിരഞ്ഞെടുക്കുക');
+        if (bids.length > 1 && a.pid === inn.prevBowler) return err('തുടർച്ചയായി രണ്ട് ഓവർ പറ്റില്ല');
+        inn.bowler = a.pid; g.pending.shift(); advance(room); return { room: room };
+      }
+    }
+    return err('അറിയാത്ത നടപടി');
+  }
+
+  var Engine = { BALLS_PER_OVER: BALLS_PER_OVER, OVERS: OVERS, SET_SIZE: SET_SIZE, MAX_TEAM: MAX_TEAM, SET_TYPES: SET_TYPES,
+    setType: setType, limitFor: limitFor, runsFor: runsFor, bands: bands, isMcq: isMcq, listSets: listSets,
+    setPlayable: setPlayable, newRoom: newRoom, normalize: normalize, reduce: reduce, teamIds: teamIds, box: box,
+    candidates: candidates, cur: cur, other: other, isCaptain: isCaptain };
+  if (typeof module !== 'undefined' && module.exports) module.exports = Engine; else root.Engine = Engine;
+})(this);
