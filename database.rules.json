@@ -16,7 +16,7 @@
         ".read": true,
         ".write": "!newData.exists() && !root.child('rooms/' + $code).exists()",
         "$msg": {
-          ".write": "(!data.exists() && newData.exists() && root.child('rooms/' + $code).exists()) || (data.exists() && !newData.exists())",
+          ".write": "(!data.exists() && newData.exists() && root.child('rooms/' + $code).exists() && root.child('rooms/' + $code + '/g/phase').val() !== 'bowlerAnswer' && root.child('rooms/' + $code + '/g/phase').val() !== 'bat' && root.child('rooms/' + $code + '/g/phase').val() !== 'judge') || (data.exists() && !newData.exists())",
           ".validate": "newData.hasChildren(['pid', 'name', 'tm', 'text', 'ts'])",
           "pid": { ".validate": "newData.isString() && newData.val().length <= 40" },
           "name": { ".validate": "newData.isString() && newData.val().length <= 24" },

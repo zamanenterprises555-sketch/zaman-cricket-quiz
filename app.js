@@ -1,4 +1,4 @@
-/* Zaman Cricket Quiz v2 - UI + rooms (Firebase) + Solo. Game rules are in engine.js, questions in questions.js */
+/* Zaman Cricket Quiz v2.2 - UI + rooms (Firebase) + Solo. Game rules are in engine.js, questions in questions.js */
 (function(){'use strict';
 const firebaseConfig = {
   apiKey: "AIzaSyBKQQRIcz1eEsz-V0r8WYsOCXBjAsR6XNQ",
@@ -22,7 +22,11 @@ var LS = {
   del: function (k) { try { localStorage.removeItem(k); } catch (e) {} }
 };
 var S = { chat: [], chatUnread: 0, chatOpen: false, tossSeen: null, room: null, me: null, solo: false, ref: null, code: null, offset: 0, shownSeq: null, bannerSeq: null, panelKey: '', tick: null, sentSeq: -1, tSeq: -1, sel: null, homeMode: '', lastPhase: '' };
-window.ZCQ = { S: S, E: E };
+function chatLocked() {
+  var g = S.room && S.room.g;
+  return !!(g && (g.phase === 'bowlerAnswer' || g.phase === 'bat' || g.phase === 'judge'));
+}
+window.ZCQ = { S: S, E: E, chatLocked: chatLocked };
 
 function deviceId() { var id = LS.get('zcq_pid'); if (!id) { id = 'p' + Math.random().toString(36).slice(2, 10); LS.set('zcq_pid', id); } return id; }
 function now() { return Date.now(); }
@@ -185,6 +189,7 @@ function chatStart(code) {
 function chatStop() { if (S.chatQ) S.chatQ.off(); S.chatQ = null; S.chatRef = null; S.chat = []; S.chatUnread = 0; S.chatOpen = false; }
 function chatSend() {
   var el = $('#chatIn'); if (!el || !S.chatRef || !S.room) return;
+  if (chatLocked()) { toast('ചോദ്യം നടക്കുമ്പോൾ ചാറ്റ് പൂട്ടിയിരിക്കുന്നു'); return; }
   var text = el.value.replace(/\s+/g, ' ').trim().slice(0, 300); if (!text) return;
   if (S.chatBusy) return; S.chatBusy = true; setTimeout(function () { S.chatBusy = false; }, 800);
   var p = S.room.players[S.me] || {}, tm = p.team ? teamName(p.team) : 'കാണി';
@@ -199,6 +204,20 @@ function chatSend() {
   }).catch(function () { toast('മെസേജ് അയക്കാൻ പറ്റിയില്ല'); });
 }
 function updateChatCount() { var el = $('#chatIn'), c = $('#chatCount'); if (el && c) c.textContent = el.value.length + '/300'; }
+function applyChatLock() {
+  var locked = chatLocked();
+  var form = document.querySelector('.chatform');
+  var inp = $('#chatIn');
+  var btn = document.querySelector('.chatform [data-act=chatSend]');
+  var note = $('#chatLockNote');
+  if (form) form.classList.toggle('locked', locked);
+  if (inp) {
+    inp.disabled = locked;
+    inp.placeholder = locked ? 'ചോദ്യം നടക്കുമ്പോൾ ചാറ്റ് പൂട്ടിയിരിക്കുന്നു' : 'മെസേജ് എഴുതുക…';
+  }
+  if (btn) btn.disabled = locked;
+  if (note) note.hidden = !locked;
+}
 function renderChat(fromData) {
   var box = $('#chat'), btn = $('#chatBtn');
   var inRoom = !!(S.room && !S.solo && S.chatRef);
@@ -209,9 +228,11 @@ function renderChat(fromData) {
   var list = $('#chatList');
   if (!list) {
     box.innerHTML = '<div class="chathead"><b>💬 റൂം ചാറ്റ്</b><span class="small">എല്ലാവർക്കും കാണാം</span><button class="btn sec sm" data-act="chatToggle">അടയ്ക്കുക</button></div>' +
-      '<div id="chatList" class="chatlist"></div><div class="chatform"><input id="chatIn" maxlength="300" placeholder="മെസേജ് എഴുതുക…" autocomplete="off"><button class="btn sm" data-act="chatSend">അയക്കുക</button></div><div class="small" id="chatCount" style="text-align:right">0/300</div>';
+      '<div id="chatList" class="chatlist"></div><div class="chatform"><input id="chatIn" maxlength="300" placeholder="മെസേജ് എഴുതുക…" autocomplete="off"><button class="btn sm" data-act="chatSend">അയക്കുക</button></div>' +
+      '<div class="chatlock" id="chatLockNote" hidden>ചോദ്യം നടക്കുമ്പോൾ ചാറ്റ് പൂട്ടിയിരിക്കുന്നു</div><div class="small" id="chatCount" style="text-align:right">0/300</div>';
     list = $('#chatList');
   }
+  applyChatLock();
   var atBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 40;
   list.innerHTML = S.chat.length ? S.chat.map(function (m) {
     var mine = m.pid === S.me;

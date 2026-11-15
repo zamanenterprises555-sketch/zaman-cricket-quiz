@@ -151,6 +151,9 @@ table.sc td{text-align:right;padding:6px 4px;border-bottom:1px solid var(--line)
 .msg .who{font-size:.74rem;font-weight:800;color:var(--gold)}.msg .who span{color:var(--mut);font-weight:600}
 .msg .tx{font-size:.92rem;overflow-wrap:anywhere;white-space:pre-wrap}
 .chatform{display:flex;gap:6px;margin-top:6px}.chatform input{padding:10px 12px}.chatform .btn{flex:none}
+.chatform.locked input{opacity:.75;cursor:not-allowed;background:rgba(255,255,255,.04)}
+.chatform.locked .btn{opacity:.7;cursor:not-allowed;background:#1a2438;color:var(--mut);box-shadow:none}
+.chatlock{text-align:center;color:var(--gold);margin:6px 2px 2px;font-weight:800;font-size:.86rem}
 .sheet{position:fixed;inset:0;z-index:25;background:rgba(5,10,20,.6);display:flex;align-items:flex-end;justify-content:center}
 .sheetin{width:100%;max-width:480px;background:var(--card);border-radius:20px 20px 0 0;border:1px solid var(--line);padding:18px 16px 22px}
 .sheetin h3{margin-bottom:6px}.sheetin input{font-size:.8rem;margin-top:8px}
