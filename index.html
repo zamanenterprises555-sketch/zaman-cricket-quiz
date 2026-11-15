@@ -11,13 +11,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Malayalam:wght@400;600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=2">
+<link rel="stylesheet" href="style.css?v=21">
 <!-- Firebase (multiplayer) -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <!-- ചോദ്യങ്ങൾ: questions.js മാത്രം മാറ്റിയാൽ മതി -->
 <script src="questions.js"></script>
-<script src="engine.js?v=2"></script>
+<script src="engine.js?v=21"></script>
 </head>
 <body>
 <div class="app">
@@ -30,6 +30,7 @@
   </header>
 
   <main>
+    <section id="chat" class="chatbox" hidden></section>
     <section id="home"></section>
     <section id="lobby" hidden></section>
     <section id="game" hidden>
@@ -41,6 +42,7 @@
 </div>
 <div id="pop" class="pop" hidden></div>
 <div id="toast" class="toast" hidden></div>
-<script src="app.js?v=2"></script>
+<div id="sheet" class="sheet" hidden></div>
+<script src="app.js?v=21"></script>
 </body>
 </html>
