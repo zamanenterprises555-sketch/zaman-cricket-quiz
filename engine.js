@@ -6,6 +6,7 @@
 (function (root) {
   'use strict';
   var BALLS_PER_OVER = 6, OVERS = 5, SET_SIZE = 30, MAX_TEAM = 11;
+  var READ_S = 3; // v2.3: calm reading time (seconds) before the batsman's answer timer starts
 
   // Set types. limit = seconds per ball. Run bands are the same fractions of
   // the limit as the 10-second OPTIONAL set (2/4/6/8/10 s).
@@ -209,7 +210,7 @@
     g.evt++;
     g.last = { id: g.evt, seq: g.seq, kind: kind, runs: runs, time: time == null ? -1 : Math.round(time * 100) / 100,
       batter: st, bowler: bwId, innings: g.innings, ball: inn.balls };
-    g.q = -1; g.pend = null; g.tries = 0; g.wrongTried = [];
+    g.q = -1; g.pend = null; g.tries = 0; g.wrongTried = []; g.seenAt = 0;
 
     var batSize = g.order[inn.bat].length;
     if (inningsOver(g, inn)) { endInnings(room); return; }
@@ -326,7 +327,7 @@
         ['A', 'B'].forEach(function (t) { if (!room.teams[t].captain || P[room.teams[t].captain].team !== t) room.teams[t].captain = teamIds(room, t)[0]; });
         if (!(room.toss && room.toss.choice)) return err('ആദ്യം ടോസ് നടത്തുക');
         var fb = room.firstBat || 'A', ord = { A: A, B: B };
-        room.g = { innings: 1, order: ord, inn: [newInnings(fb, other(fb), OVERS * BALLS_PER_OVER, ord[fb].length, 0)], target: 0, seq: 0, evt: 0, tries: 0, wrongTried: [], q: -1, pending: [], chooser: '', set: room.set, limit: limitFor(room.set) };
+        room.g = { innings: 1, order: ord, inn: [newInnings(fb, other(fb), OVERS * BALLS_PER_OVER, ord[fb].length, 0)], target: 0, seq: 0, evt: 0, tries: 0, wrongTried: [], q: -1, pending: [], chooser: '', set: room.set, limit: limitFor(room.set), sid: String(a.sid || a.now || 0) };
         room.status = 'playing';
         startInnings(room);
         return { room: room };
@@ -367,7 +368,7 @@
         if (g.phase !== 'bowlerAnswer') return err('ഇപ്പോൾ പറ്റില്ല');
         if (by !== 'solo' && by !== inn.bowler) return err('ബൗളർക്ക് മാത്രം');
         var ok = isMcq(q) ? (+a.choice === q.a) : !!a.ok;
-        if (ok) { g.phase = 'bat'; g.deliveredAt = a.now || 0; return { room: room }; }
+        if (ok) { g.phase = 'bat'; g.deliveredAt = a.now || 0; g.seenAt = 0; return { room: room }; }
         bowlerExtra(room, isMcq(q) ? +a.choice : null); return { room: room };
       }
       case 'batAns': {
@@ -384,8 +385,18 @@
         }
         return { room: room };
       }
+      case 'seen': {
+        // v2.3: the striker's phone reports when the question actually appeared there (network delay safe)
+        if (g.phase !== 'bat' || a.seq !== g.seq) return err('ഈ പന്ത് കഴിഞ്ഞു');
+        if (by !== 'solo' && by !== inn.striker) return err('സ്ട്രൈക്കർക്ക് മാത്രം');
+        if (g.seenAt) return err('ശരി');
+        g.seenAt = a.now || 0; return { room: room };
+      }
       case 'timeout': {
         if (g.phase !== 'bat' || a.seq !== g.seq) return err('ഈ പന്ത് കഴിഞ്ഞു');
+        // v2.3: never time out before reading time + limit has passed since the striker saw the question
+        var from = g.seenAt || g.deliveredAt || 0;
+        if (a.now && from && a.now - from < (L + READ_S) * 1000) return err('സമയം ബാക്കിയുണ്ട്');
         finishBall(room, 'timeout', 0, L + 0.01); return { room: room };
       }
       case 'judge': {
@@ -433,7 +444,7 @@
     return err('അറിയാത്ത നടപടി');
   }
 
-  var Engine = { BALLS_PER_OVER: BALLS_PER_OVER, OVERS: OVERS, SET_SIZE: SET_SIZE, MAX_TEAM: MAX_TEAM, SET_TYPES: SET_TYPES,
+  var Engine = { READ_S: READ_S, BALLS_PER_OVER: BALLS_PER_OVER, OVERS: OVERS, SET_SIZE: SET_SIZE, MAX_TEAM: MAX_TEAM, SET_TYPES: SET_TYPES,
     setType: setType, limitFor: limitFor, runsFor: runsFor, bands: bands, isMcq: isMcq, listSets: listSets,
     setPlayable: setPlayable, newRoom: newRoom, normalize: normalize, reduce: reduce, teamIds: teamIds, box: box,
     candidates: candidates, cur: cur, other: other, isCaptain: isCaptain, MAX_SUPER: MAX_SUPER };

@@ -1,4 +1,4 @@
-/* Zaman Cricket Quiz v2.2 - UI + rooms (Firebase) + Solo. Game rules are in engine.js, questions in questions.js */
+/* Zaman Cricket Quiz v2.3 - UI + rooms (Firebase) + Solo. Game rules are in engine.js, questions in questions.js */
 (function(){'use strict';
 const firebaseConfig = {
   apiKey: "AIzaSyBKQQRIcz1eEsz-V0r8WYsOCXBjAsR6XNQ",
@@ -48,11 +48,11 @@ function limitTxt(L) { return L >= 60 ? (L / 60) + ' മിനിറ്റ്' :
 function oversTxt(b) { return Math.floor(b / 6) + '.' + (b % 6); }
 
 // ------------------------------------------------------------ dispatch
-function dispatch(a) {
+function dispatch(a, quiet) {
   a.by = S.solo ? 'solo' : S.me; a.now = serverNow();
   if (S.solo) {
     var r = E.reduce(S.room, a, QS);
-    if (r.error) { toast(r.error); return Promise.resolve(false); }
+    if (r.error) { if (!quiet) toast(r.error); return Promise.resolve(false); }
     S.room = r.room; LS.set('zcq_solo', S.room); render(); return Promise.resolve(true);
   }
   if (!S.ref) return Promise.resolve(false);
@@ -62,8 +62,8 @@ function dispatch(a) {
     var r = E.reduce(E.normalize(cur), a, QS);
     if (r.error) { err = r.error; return; }
     err = null; return r.room;
-  }).then(function () { S.tx--; if (err) { toast(err); return false; } return true; })
-    .catch(function (e) { S.tx--; console.warn('tx', e && e.message); toast('ഇന്റർനെറ്റ് പ്രശ്നം. വീണ്ടും ശ്രമിക്കുക'); return false; });
+  }).then(function () { S.tx--; if (err) { if (!quiet) toast(err); return false; } return true; })
+    .catch(function (e) { S.tx--; console.warn('tx', e && e.message); if (!quiet) toast('ഇന്റർനെറ്റ് പ്രശ്നം. വീണ്ടും ശ്രമിക്കുക'); return false; });
 }
 
 // ------------------------------------------------------------ rooms
@@ -111,6 +111,7 @@ function useRejoinLink(code, pid, k) {
 function connect(code, pid, name, tok) {
   disconnect();
   if (!tok) { var old = LS.get('zcq_session'); tok = (old && old.code === code && old.pid === pid && old.tok) || randTok(); }
+  resetBallMemory();
   S.solo = false; S.code = code; S.me = pid; S.shownSeq = null; S.bannerSeq = null; S.tossSeen = null; S.panelKey = '';
   LS.set('zcq_session', { code: code, pid: pid, name: name, left: false, tok: tok });
   S.ref = db.ref('rooms/' + code);
@@ -150,7 +151,7 @@ function disconnect() {
   S.ref = null;
 }
 function leave() {
-  if (S.solo) { S.room = null; S.solo = false; render(); return; }
+  if (S.solo) { var sb = soloBall(); if (sb) LS.set('zcq_hid', { k: rcvKey(sb), at: now() }); S.room = null; S.solo = false; render(); return; }
   var ses = LS.get('zcq_session'); if (ses) { ses.left = true; LS.set('zcq_session', ses); }
   disconnect(); S.room = null; render();
 }
@@ -262,10 +263,10 @@ function startSolo() {
   for (var i = 2; i <= cA; i++) { go({ type: 'join', pid: 'A' + i, name: nA + ' ' + i, now: t + i }); go({ type: 'team', pid: 'A' + i, team: 'A' }); }
   for (var k = 1; k <= cB; k++) { go({ type: 'join', pid: 'B' + k, name: nB + ' ' + k, now: t + 20 + k }); go({ type: 'team', pid: 'B' + k, team: 'B' }); }
   room.createdAt = t;
-  disconnect(); S.solo = true; S.me = 'solo'; S.code = 'SOLO' + t; S.room = room; S.shownSeq = null; S.bannerSeq = null; S.tossSeen = null; S.panelKey = '';
+  disconnect(); resetBallMemory(); S.solo = true; S.me = 'solo'; S.code = 'SOLO' + t; S.room = room; S.shownSeq = null; S.bannerSeq = null; S.tossSeen = null; S.panelKey = '';
   LS.set('zcq_solo', room); render(); // -> toss screen
 }
-function resumeSolo() { var r = LS.get('zcq_solo'); if (!r) return; disconnect(); S.solo = true; S.me = 'solo'; S.code = 'SOLO' + (r.createdAt || 0); S.room = E.normalize(r); S.panelKey = ''; S.tossSeen = null; render(); }
+function resumeSolo() { var r = LS.get('zcq_solo'); if (!r) return; disconnect(); resetBallMemory(); S.solo = true; S.me = 'solo'; S.code = 'SOLO' + (r.createdAt || 0); S.room = E.normalize(r); S.panelKey = ''; S.tossSeen = null; soloUnpause(); render(); }
 
 // ------------------------------------------------------------ render
 function show(id) { ['home', 'lobby', 'game', 'result'].forEach(function (x) { $('#' + x).hidden = x !== id; }); }
@@ -474,18 +475,18 @@ function qHtml(q, withSpeak) {
   if (withSpeak) h += '<button class="btn sec sm" data-act="speak" style="margin-bottom:6px">🔊 വീണ്ടും കേൾക്കുക</button>';
   return h;
 }
-function optsHtml(q, act, disabled, sel, bad) {
+function optsHtml(q, act, disabled, sel, bad, lock) {
   var h = '', K = ['A', 'B', 'C', 'D', 'E', 'F'];
   bad = bad || [];
   q.o.forEach(function (o, i) {
     var isBad = bad.indexOf(i) >= 0, dis = disabled || isBad;
-    h += '<button class="opt' + (sel === i ? ' sel' : '') + (isBad ? ' bad' : '') + '"' + (dis ? ' disabled' : ' data-act="' + act + '" data-i="' + i + '"') + '><span class="k">' + (isBad ? '✗' : K[i]) + '</span><span>' + esc(o) + '</span></button>';
+    h += '<button class="opt' + (sel === i ? ' sel' : '') + (isBad ? ' bad' : '') + '"' + (dis ? ' disabled' : (lock ? ' disabled data-lock="1"' : '') + ' data-act="' + act + '" data-i="' + i + '"') + '><span class="k">' + (isBad ? '✗' : K[i]) + '</span><span>' + esc(o) + '</span></button>';
   });
   return h;
 }
 function ringHtml() {
-  return '<div class="timerwrap"><div class="ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" stroke="#26355a" stroke-width="10" fill="none"/><circle id="ringArc" cx="60" cy="60" r="52" stroke="#19b46b" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="0"/></svg><div class="num"><span id="ringNum">-</span><small>ബാക്കി</small></div></div>' +
-    '<div class="worth"><div class="w1">ഇപ്പോൾ ശരിയുത്തരം നൽകിയാൽ</div><div class="w2" id="ringWorth">6 റൺസ്</div><div class="small" id="ringEl"></div></div></div>';
+  return '<div class="timerwrap"><div class="ring"><svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" stroke="#26355a" stroke-width="10" fill="none"/><circle id="ringArc" cx="60" cy="60" r="52" stroke="#19b46b" stroke-width="10" fill="none" stroke-linecap="round" stroke-dasharray="326.7" stroke-dashoffset="0"/></svg><div class="num"><span id="ringNum">-</span><small id="ringSm">ബാക്കി</small></div></div>' +
+    '<div class="worth"><div class="w1" id="ringW1">ഇപ്പോൾ ശരിയുത്തരം നൽകിയാൽ</div><div class="w2" id="ringWorth">6 റൺസ്</div><div class="small" id="ringEl"></div></div></div>';
 }
 // captain/host: replace an offline bowler or batsman
 function replaceCard(r) {
@@ -512,8 +513,10 @@ function renderGame() {
   if (bk && bk !== S.bannerSeq) { S.bannerSeq = bk; var bn = g.banner; setTimeout(function () { showInningsPop(bn); }, g.last ? 1700 : 0); }
 
   var on = [inn.striker, inn.non, inn.bowler].map(function (x) { return x && online(x) ? 1 : 0; }).join('');
-  var key = [g.phase, g.seq, g.innings, inn.balls, inn.striker, inn.non, inn.bowler, rl, g.pending.join(','), g.tries, on].join('|');
+  if (g.phase === 'bat') on = '';
+  var key = [g.phase, g.seq, g.innings, inn.balls, inn.striker, inn.non, inn.bowler, rl, g.pending.join(','), g.tries, on, g.sid || ''].join('|');
   if (key === S.panelKey) return;
+  var keepTxt = $('#batText') ? $('#batText').value : '';
   S.panelKey = key; S.sel = null;
   var h = replaceCard(r), capBat = solo || E.isCaptain(r, me, inn.bat), capBowl = solo || E.isCaptain(r, me, inn.bowl);
   var batIds = g.order[inn.bat], bowlIds = g.order[inn.bowl];
@@ -559,9 +562,10 @@ function renderGame() {
     h += '<div class="card">' + ringHtml();
     if (!mine) h += '<p class="mut" style="margin-bottom:6px">ലൈവ്: ' + esc(nm(inn.striker)) + ' ഉത്തരം ആലോചിക്കുന്നു…</p>';
     else if (solo) h += '<p class="mut" style="margin-bottom:6px">' + esc(nm(inn.striker)) + ' (ബാറ്റ്സ്മാൻ)</p>';
+    var rdg = mine && raw(r) < E.READ_S;
     h += qHtml(q, mine);
-    if (E.isMcq(q)) h += optsHtml(q, 'bat', !mine, null);
-    else if (mine) h += '<textarea id="batText" placeholder="ഉത്തരം ഇവിടെ എഴുതുക"></textarea><button class="btn gold" data-act="batText">ഉത്തരം അയക്കുക</button>';
+    if (E.isMcq(q)) h += optsHtml(q, 'bat', !mine, null, null, rdg);
+    else if (mine) h += '<textarea id="batText" placeholder="ഉത്തരം ഇവിടെ എഴുതുക"></textarea><button class="btn gold" data-act="batText"' + (rdg ? ' disabled data-lock="1"' : '') + '>ഉത്തരം അയക്കുക</button>';
     h += '</div>';
   }
   else if (g.phase === 'judge') {
@@ -581,36 +585,80 @@ function renderGame() {
     else h += waitBox('ഓവർ കഴിഞ്ഞു. ' + esc(nm(inn.prevBowler)) + ' അടുത്ത ബൗളറെ തിരഞ്ഞെടുക്കുന്നു…');
   }
   $('#panel').innerHTML = '<div class="panel">' + h + '</div>';
+  if (keepTxt && $('#batText')) $('#batText').value = keepTxt;
+  if (g.phase === 'bat' && (solo || rl === 'striker')) { var pp = $('#pop'); if (pp && !pp.hidden && !/toss/.test(pp.className)) pp.hidden = true; }
   if (g.phase === 'bat') startTick(); else stopTick();
 }
 
 // ------------------------------------------------------------ timer
-function rcvKey(r) { return 'zcq_rcv_' + S.code + '_' + r.g.seq; }
-function elapsed(r) {
+// v2.3: every ball has a key that is unique per match (g.sid), so a rematch in the
+// same room or a new solo game can never reuse an old ball's start time / "already answered" mark.
+function ballKey(g) { return (g.sid || '0') + '_' + g.innings + '_' + g.seq; }
+function rcvKey(r) { return 'zcq_rcv_' + S.code + '_' + ballKey(r.g); }
+function resetBallMemory() { S.sentSeq = null; S.tSeq = null; S.seenSeq = null; }
+// seconds since the question appeared (includes the 3 s reading time)
+function raw(r) {
   var g = r.g, rl = role(r);
   if (S.solo || rl === 'striker') {
     var k = rcvKey(r), t = LS.get(k);
     if (!t) { t = now(); LS.set(k, t); }
     return (now() - t) / 1000;
   }
-  return (serverNow() - (g.deliveredAt || serverNow())) / 1000;
+  return (serverNow() - (g.seenAt || g.deliveredAt || serverNow())) / 1000;
+}
+// answer time = time after the reading period (this decides runs / out)
+function elapsed(r) { return Math.max(0, raw(r) - E.READ_S); }
+// solo: the clock stops while the app is in the background (phone call, WhatsApp, screen off)
+function soloBall() { var r = S.room; return S.solo && r && r.status === 'playing' && r.g && r.g.phase === 'bat' ? r : null; }
+function soloUnpause() {
+  var hid = LS.get('zcq_hid'); LS.del('zcq_hid');
+  var r = soloBall(); if (!r || !hid || hid.k !== rcvKey(r)) return;
+  var t = LS.get(hid.k); if (t) LS.set(hid.k, t + Math.max(0, now() - hid.at));
+}
+document.addEventListener('visibilitychange', function () {
+  var r = soloBall(); if (!r) return;
+  if (document.hidden) LS.set('zcq_hid', { k: rcvKey(r), at: now() }); else soloUnpause();
+});
+window.addEventListener('pagehide', function () { var r = soloBall(); if (r && !LS.get('zcq_hid')) LS.set('zcq_hid', { k: rcvKey(r), at: now() }); });
+// answer could not be saved (network error): let the batsman tap again instead of silently waiting for "out"
+function batRetry(bk) {
+  var r = S.room; if (!r || !r.g || r.g.phase !== 'bat' || ballKey(r.g) !== bk || S.sentSeq !== bk) return;
+  S.sentSeq = null;
+  document.querySelectorAll('[data-act="bat"]').forEach(function (b) { b.disabled = false; b.classList.remove('sel'); });
 }
 function startTick() { if (S.tick) return; S.tick = setInterval(tick, 100); tick(); }
 function stopTick() { if (S.tick) { clearInterval(S.tick); S.tick = null; } }
 function tick() {
   var r = S.room; if (!r || r.status !== 'playing' || r.g.phase !== 'bat') return stopTick();
-  var g = r.g, L = g.limit, el = elapsed(r), left = L - el, rl = role(r);
-  var arc = $('#ringArc'), num = $('#ringNum'), worth = $('#ringWorth');
+  if (S.solo && document.hidden) return;
+  var g = r.g, L = g.limit, bk = ballKey(g), rw = raw(r), el = Math.max(0, rw - E.READ_S), left = L - el, rl = role(r);
+  var mine = S.solo || rl === 'striker', reading = rw < E.READ_S;
+  if (mine && !S.solo && !g.seenAt && S.seenSeq !== bk) { S.seenSeq = bk; dispatch({ type: 'seen', seq: g.seq }, true); }
+  var arc = $('#ringArc'), num = $('#ringNum'), worth = $('#ringWorth'), w1 = $('#ringW1'), sm = $('#ringSm');
+  if (reading) {
+    if (arc) { arc.setAttribute('stroke-dashoffset', '0'); arc.setAttribute('stroke', '#5b7bd5'); }
+    if (num) num.textContent = String(Math.max(1, Math.ceil(E.READ_S - rw)));
+    if (sm) sm.textContent = 'വായിക്കൂ';
+    if (w1) w1.textContent = 'ചോദ്യം വായിക്കാനുള്ള സമയം';
+    if (worth) { worth.textContent = limitTxt(L) + ' ഉടൻ തുടങ്ങും'; worth.style.color = '#9fb3e8'; }
+    return;
+  }
+  document.querySelectorAll('[data-lock]').forEach(function (b) { b.disabled = false; b.removeAttribute('data-lock'); });
+  if (sm && sm.textContent !== 'ബാക്കി') sm.textContent = 'ബാക്കി';
+  if (w1 && w1.textContent !== 'ഇപ്പോൾ ശരിയുത്തരം നൽകിയാൽ') w1.textContent = 'ഇപ്പോൾ ശരിയുത്തരം നൽകിയാൽ';
   var runs = E.runsFor(el, L);
   if (arc) { arc.setAttribute('stroke-dashoffset', String(326.7 * Math.min(1, el / L))); arc.setAttribute('stroke', runs >= 4 ? '#19b46b' : runs >= 2 ? '#f5b301' : '#e5484d'); }
   if (num) num.textContent = fmtT(left);
   if (worth) { worth.textContent = runs < 0 ? 'ഔട്ട്' : runs + ' റൺസ്'; worth.style.color = runs >= 4 ? '#19b46b' : runs >= 2 ? '#f5b301' : '#e5484d'; }
-  if (S.solo || rl === 'striker') {
-    if (el > L && S.sentSeq !== g.seq) { S.sentSeq = g.seq; dispatch({ type: 'batAns', choice: -1, time: el, seq: g.seq }); }
-  } else if (el > L + 6 && S.tSeq !== g.seq) { S.tSeq = g.seq; dispatch({ type: 'timeout', seq: g.seq }); }
+  if (mine) {
+    if (el > L && S.sentSeq !== bk) { S.sentSeq = bk; dispatch({ type: 'batAns', choice: -1, time: el, seq: g.seq }); }
+  } else if (S.tSeq !== bk) {
+    // other phones end the ball only if the striker's phone could not (offline / app closed).
+    // Count from when the question reached the striker; if that is unknown, wait longer.
+    var grace = g.seenAt ? 6 : (online(g.inn[g.innings - 1].striker) ? 30 : 10);
+    if (el > L + grace) { S.tSeq = bk; dispatch({ type: 'timeout', seq: g.seq }, true).then(function (ok) { if (!ok) setTimeout(function () { if (S.tSeq === bk) S.tSeq = null; }, 3000); }); }
+  }
 }
-
-// ------------------------------------------------------------ popups
 function showPop(cls, big, sub, ms) {
   var p = $('#pop'); p.className = 'pop ' + cls; p.innerHTML = '<div class="in"><div class="big">' + big + '</div>' + (sub ? '<div class="sub">' + sub + '</div>' : '') + '</div>'; p.hidden = false;
   clearTimeout(showPop.t); showPop.t = setTimeout(function () { p.hidden = true; }, ms || 1700);
@@ -706,7 +754,7 @@ document.addEventListener('click', function (ev) {
     case 'team': return dispatch({ type: 'team', pid: S.me, team: d.t });
     case 'cap': return dispatch({ type: 'captain', team: d.t, pid: d.p });
     case 'first': return dispatch({ type: 'firstBat', team: d.t });
-    case 'start': return dispatch({ type: 'start' });
+    case 'start': return dispatch({ type: 'start', sid: now().toString(36) + Math.random().toString(36).slice(2, 7) });
     case 'toss': return dispatch({ type: 'toss', coin: Math.random() });
     case 'tossChoice': return dispatch({ type: 'tossChoice', choice: d.c });
     case 'replace': return dispatch({ type: 'replace', slot: d.s, pid: d.p });
@@ -724,11 +772,11 @@ document.addEventListener('click', function (ev) {
     case 'bowlerSubmit': if (S.sel == null) return toast('ഉത്തരം തിരഞ്ഞെടുക്കുക'); el.disabled = true; return dispatch({ type: 'bowlerAns', choice: S.sel });
     case 'bowlerOk': return dispatch({ type: 'bowlerAns', ok: !!d.ok });
     case 'bat': {
-      var g = r.g; if (S.sentSeq === g.seq) return; var t = elapsed(r); S.sentSeq = g.seq;
+      var g = r.g, bk = ballKey(g); if (S.sentSeq === bk || g.phase !== 'bat') return; if (raw(r) < E.READ_S) return; var t = elapsed(r); S.sentSeq = bk;
       document.querySelectorAll('[data-act="bat"]').forEach(function (b) { b.disabled = true; }); el.classList.add('sel');
-      return dispatch({ type: 'batAns', choice: +d.i, time: t, seq: g.seq });
+      return dispatch({ type: 'batAns', choice: +d.i, time: t, seq: g.seq }).then(function (ok) { if (!ok) batRetry(bk); });
     }
-    case 'batText': { var g2 = r.g; if (S.sentSeq === g2.seq) return; var t2 = elapsed(r); var tx = ($('#batText').value || '').trim(); if (!tx) return toast('ഉത്തരം എഴുതുക'); S.sentSeq = g2.seq; return dispatch({ type: 'batAns', text: tx, time: t2, seq: g2.seq }); }
+    case 'batText': { var g2 = r.g, bk2 = ballKey(g2); if (S.sentSeq === bk2 || g2.phase !== 'bat') return; if (raw(r) < E.READ_S) return; var t2 = elapsed(r); var tx = ($('#batText').value || '').trim(); if (!tx) return toast('ഉത്തരം എഴുതുക'); S.sentSeq = bk2; return dispatch({ type: 'batAns', text: tx, time: t2, seq: g2.seq }).then(function (ok) { if (!ok) batRetry(bk2); }); }
     case 'judge': return dispatch({ type: 'judge', ok: !!d.ok });
     case 'nextBat': return dispatch({ type: 'nextBatsman', pid: d.p });
     case 'nextBowl': return dispatch({ type: 'nextBowler', pid: d.p });

@@ -1,5 +1,5 @@
 // Zaman Cricket Quiz service worker. Bump VERSION on every release.
-const VERSION = 'zcq-v2.2.0';
+const VERSION = 'zcq-v2.3.0';
 const ASSETS = ['./', './index.html', './style.css', './engine.js', './app.js', './questions.js', './manifest.json', './icon.svg', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => {
   self.skipWaiting();
